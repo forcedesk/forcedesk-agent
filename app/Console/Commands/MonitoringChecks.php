@@ -38,6 +38,8 @@ class MonitoringChecks extends Command
         $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/getpayloads');
 
         $response = $request->getBody()->getContents();
+
+        dd($response);
         $data = json_decode($response, false);
 
         if (count($data) == '0')
