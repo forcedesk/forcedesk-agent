@@ -5,7 +5,6 @@ namespace App\Console\Commands\Services;
 use App\Jobs\ProbeDispatch;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
-use function App\Console\Commands\config;
 
 class MonitoringService extends Command
 {

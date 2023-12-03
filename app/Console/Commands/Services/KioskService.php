@@ -5,7 +5,6 @@ namespace App\Console\Commands\Services;
 use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
-use function App\Console\Commands\config;
 
 class KioskService extends Command
 {
