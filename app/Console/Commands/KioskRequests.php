@@ -61,7 +61,34 @@ class KioskRequests extends Command
 
             $response = $this->passwordResetService->handlePasswordReset($item->payload_data->kioskid, $item->payload_data->username);
 
-            dd($response);
+            $payload = [
+                'kioskid' => $item->payload_data->kioskid,
+                'resetdata' => $response,
+            ];
+
+            try {
+                $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset');
+
+                $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset', [
+                    'headers' => [],
+                    'body' => json_encode($payload),
+                ]);
+
+                $status = json_decode($response->getBody(), false);
+
+                if($status->status != 'ok')
+                {
+                    $this->error('There was an error sending the data to SchoolDesk!');
+                    $this->error($status->message);
+                } else {
+                    $this->info('Posting the data succeeded!');
+                    $this->info($status->message);
+                }
+
+            } catch (\Exception $e)
+            {
+                \Log::error('Could not send data to SchoolDesk Tenant');
+            }
 
         }
 
