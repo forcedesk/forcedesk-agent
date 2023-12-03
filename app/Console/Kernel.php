@@ -15,14 +15,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        /* Check for Monitoring Payloads */
-        $schedule->command('monitoring:run')->everyMinute()->runInBackground();
 
         /* Check for Kiosk Requests */
-        $schedule->command('kiosk:run')->everyMinute()->runInBackground();
-
-        /* Check for Device Manager Requests */
-        $schedule->command('device-manager:run')->everyMinute()->runInBackground();
+        $schedule->command('agent:kiosk')->everyFifteenSeconds()->withoutOverlapping()->runInBackground();
 
     }
 
