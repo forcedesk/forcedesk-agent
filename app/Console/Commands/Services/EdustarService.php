@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands\SchoolDesk;
+namespace App\Console\Commands\Services;
 
 use App\Models\EdupassAccounts;
 use GuzzleHttp\Client;
@@ -83,6 +83,8 @@ class EdustarService extends Command
         }
 
         $this->info('Imported '.$importcount.' accounts.');
+
+        return true;
 
     }
 }
