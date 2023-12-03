@@ -141,8 +141,8 @@ class PasswordResetService extends Controller
                 $studentuser->save();
 
                 return [
-                    'action' => 'declined',
-                    'message' => 'API Error. Contact Vendor.',
+                    'action' => 'authorized',
+                    'password' => $genpassword
                 ];
 
             } catch (\LdapRecord\Exceptions\InsufficientAccessException $ex) {
@@ -166,7 +166,7 @@ class PasswordResetService extends Controller
 
                 return [
                     'action' => 'declined',
-                    'message' => 'API Error. Contact Vendor.',
+                    'message' => 'LDAP Error. Contact Vendor.',
                 ];
             } catch (\LdapRecord\LdapRecordException $ex) {
 
@@ -178,7 +178,7 @@ class PasswordResetService extends Controller
 
                 return [
                     'action' => 'declined',
-                    'message' => 'API Error. Contact Vendor.',
+                    'message' => 'LDAP Error. Contact Vendor.',
                 ];
             }
         } elseif ($edupassacct) {
@@ -187,7 +187,7 @@ class PasswordResetService extends Controller
 
                 return [
                     'action' => 'declined',
-                    'message' => 'API Error. Contact Vendor.',
+                    'message' => 'Edustar API Error. Contact Vendor.',
                 ];
 
             }
@@ -228,7 +228,7 @@ class PasswordResetService extends Controller
 
                 return [
                     'action' => 'declined',
-                    'payload' => 'API Error. Contact Vendor',
+                    'payload' => 'Edustar API Error. Contact Vendor',
                 ];
 
             }
@@ -236,7 +236,7 @@ class PasswordResetService extends Controller
         } else {
             return [
                 'action' => 'declined',
-                'payload' => 'API Error. Contact Vendor',
+                'payload' => 'Account does not exist. Check your code and try again.',
             ];
         }
 
