@@ -24,9 +24,6 @@ class Kernel extends ConsoleKernel
         /* Synchronize Papercut Data and send to tenant */
         $schedule->command('agent:papercut-service')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
 
-        /* Synchronize Papercut Data and send to tenant */
-        $schedule->command('agent:papercut-service')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
-
         /* Synchronize Local Users */
         $schedule->command('agent:usersync-service')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
 
