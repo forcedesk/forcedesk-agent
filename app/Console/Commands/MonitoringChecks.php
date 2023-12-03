@@ -39,8 +39,9 @@ class MonitoringChecks extends Command
 
         $response = $request->getBody()->getContents();
 
-        dd($response);
         $data = json_decode($response, false);
+
+        dd($data);
 
         if (count($data) == '0')
         {
