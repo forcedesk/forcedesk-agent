@@ -183,7 +183,7 @@ class PasswordResetService extends Controller
             }
         } elseif ($edupassacct) {
 
-            if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_schoolcode')) || empty(config('agentconfig.emc.emc_url'))) {
+            if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_school_code')) || empty(config('agentconfig.emc.emc_url'))) {
 
                 return [
                     'action' => 'declined',
