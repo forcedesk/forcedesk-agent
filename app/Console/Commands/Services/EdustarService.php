@@ -20,7 +20,7 @@ class EdustarService extends Command
      *
      * @var string
      */
-    protected $description = 'Performs a synchronization of student data from EdustarMC.';
+    protected $description = 'Performs a synchronization of student data from the Edustar Management Console.';
 
     /**
      * Create a new command instance.
