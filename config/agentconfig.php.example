@@ -1,0 +1,30 @@
+<?php
+
+return [
+
+    'tenant' => [
+        // The URL of your SchoolDesk Tenant (EG: demo-c3fb903d.schooldesk.education)
+        'tenant_url' => '',
+        // The API key used to connect to the SchoolDesk Tenant.
+        'tenant_api_key' => '',
+    ],
+    'papercut' => [
+        'api_url' => '',
+        'api_key' => '',
+        'enabled' => 'true',
+    ],
+    'ldap' => [
+        // Should be your primary domain controller.
+        'ad_dc' => '',
+        // An ordinary service account will suffice. It needs permission to change passwords.
+        'ad_svc_user_cn' => '',
+        // The service account's password. This should not expire or require changing.
+        'ad_svc_password' => '',
+        // The root of your directory.
+        'ad_base_dn' => '',
+        // The Group Scope containing your Staff
+        'staff_scope' => '',
+        // The Group Scope containing your Students
+        'student_scope' => '',
+    ],
+];
