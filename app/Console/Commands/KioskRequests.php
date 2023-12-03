@@ -2,12 +2,19 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\ProbeDispatch;
+use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
 
 class KioskRequests extends Command
 {
+    protected PasswordResetService $passwordResetService;
+
+    public function __construct(PasswordResetService $passwordResetService)
+    {
+        parent::__construct();
+        $this->passwordResetService = $passwordResetService;
+    }
     /**
      * The name and signature of the console command.
      *
@@ -20,7 +27,7 @@ class KioskRequests extends Command
      *
      * @var string
      */
-    protected $description = 'Runs the agent and checks for kiosk requests.';
+    protected $description = 'Run the agent and checks for kiosk requests.';
 
     /**
      * Execute the console command.
@@ -30,73 +37,33 @@ class KioskRequests extends Command
     public function handle()
     {
 
-        if(config('agentconfig.schooldeskagent.strict_logging') == true) {
+        if(config('agentconfig.agent.strict_logging') == true) {
             \Log::info('Logging is enabled');
         }
 
         $client = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.schooldeskagent.tenant_api_key'),
+            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
         )]);
 
-        echo "Connecting to: " . config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/payloads/kiosk';
-
-        $request = $client->get(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/payloads/kiosk');
+        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/kiosk/payloads');
 
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);
 
-        $itemcount = count($data);
-
-        if($itemcount >= 1) {
-            \Log::info("SchoolDesk Agent received ".$itemcount." payloads.");
-        } else {
-            \Log::info("SchoolDesk Agent received no payloads. Sleeping until next run....");
+        if (count($data) == '0')
+        {
+            $this->error('No kiosk payloads received');
+            return false;
         }
 
         foreach ($data as $item) {
 
-            /* Handle Probe Checks */
-            if ($item->type == 'probecheck') {
-                foreach ($item->payload_data as $payload) {
-                    ProbeDispatch::dispatch($payload);
-                }
-            }
+            dd($item);
 
-            /* Handle Device Backup Requests */
-            if ($item->type == 'devicebackup') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
+            $response = $this->passwordResetService->handlePasswordReset($item->kioskid, $item->username);
 
-            /* Handle Password Resets */
-            if ($item->type == 'passwordreset') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle Papercut PIN requests */
-            if ($item->type == 'papercutpin') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle Papercut Balance Requests */
-            if ($item->type == 'papercutbal') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle EduPass Imports */
-            if ($item->type == 'edupassimport') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
+            dd($response);
 
         }
 
