@@ -41,8 +41,6 @@ class MonitoringChecks extends Command
 
         $data = json_decode($response, false);
 
-        dd($data);
-
         if (count($data) == '0')
         {
             $this->error('No monitoring payloads received');
