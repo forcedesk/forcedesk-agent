@@ -30,75 +30,27 @@ class MonitoringChecks extends Command
     public function handle()
     {
 
-        if(config('agentconfig.schooldeskagent.strict_logging') == true) {
-            \Log::info('Logging is enabled');
-        }
-
         $client = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.schooldeskagent.tenant_api_key'),
+            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
         )]);
 
-        echo "Connecting to: " . config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/payloads/monitoring';
-
-        $request = $client->get(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/payloads/monitoring');
+        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/getpayloads');
 
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);
 
-        $itemcount = count($data);
-
-        if($itemcount >= 1) {
-            \Log::info("SchoolDesk Agent received ".$itemcount." payloads.");
-        } else {
-            \Log::info("SchoolDesk Agent received no payloads. Sleeping until next run....");
+        if (count($data) == '0')
+        {
+            $this->error('No monitoring payloads received');
+            return false;
         }
 
-        foreach ($data as $item) {
-
-            /* Handle Probe Checks */
-            if ($item->type == 'probecheck') {
-                foreach ($item->payload_data as $payload) {
-                    ProbeDispatch::dispatch($payload);
-                }
-            }
-
-            /* Handle Device Backup Requests */
-            if ($item->type == 'devicebackup') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle Password Resets */
-            if ($item->type == 'passwordreset') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle Papercut PIN requests */
-            if ($item->type == 'papercutpin') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle Papercut Balance Requests */
-            if ($item->type == 'papercutbal') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
-            /* Handle EduPass Imports */
-            if ($item->type == 'edupassimport') {
-                foreach ($item->payload_data as $payload) {
-                    DeviceBackup::dispatch($payload);
-                }
-            }
-
+        foreach ($data->payload_data as $payload) {
+            ProbeDispatch::dispatch($payload);
         }
+
+        return true;
 
     }
 }

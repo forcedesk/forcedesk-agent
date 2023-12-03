@@ -8,73 +8,40 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use PhpProbe\Probe\PingProbe;
-use PhpProbe\Probe\TcpProbe;
+use Illuminate\Support\Facades\Process;
 
 class ProbeDispatch implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The podcast instance.
-     *
-     * @var \App\Models\MonitoringProbes
-     */
     public $probe;
 
-    /**
-     * Create a new job instance.
-     *
-     * @return void
-     */
     public function __construct($probe)
     {
         $this->probe = $probe;
     }
 
-    /**
-     * Execute the job.
-     *
-     * @return void
-     */
     public function handle()
     {
 
         $client = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.schooldeskagent.tenant_api_key'),
+            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
         )]);
 
-        $checkprobe = $this->probe;
+        if ($this->probe->check_type == 'tcp') {
 
-        if (config('agentconfig.schooldeskagent.strict_logging') == true) {
-            \Log::info('Checking a probe...');
-        }
+            // Run the probe via the Process facade.
+            $tcpProbe = Process::run('nc -vzw 5 -q 2 '.$this->probe->host.' '.$this->probe->port);
 
-        if ($checkprobe->check_type == 'tcp') {
-
-            $tcpProbe = new TcpProbe($checkprobe->name, array(), new \PhpProbe\Adapter\NetcatAdapter());
-            $tcpProbe->host($checkprobe->host)->port($checkprobe->port);
-
-            try {
-                $tcpProbe->check();
-            } catch (Symfony\Component\Process\Exception\ProcessTimedOutException$e) {
-                \Log::info('An exception occurred');
-            }
-
-            if ($tcpProbe->hasSucceeded()) {
+            if ($tcpProbe->successful()) {
 
                 $data = [
-                    'responsetype' => 'probecheck',
-                    'probeid' => $checkprobe->probeid,
-                    'probestatus' => 'up',
+                    'id' => $this->probe->probeid,
+                    'status' => 'up',
                 ];
 
-                if (config('agentconfig.schooldeskagent.strict_logging') == true) {
-                    \Log::info('Probe was up...');
-                }
-
-                $response = $client->post(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/response', [
+                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/response', [
                     'headers' => [],
                     'body' => json_encode($data),
                 ]);
@@ -82,16 +49,11 @@ class ProbeDispatch implements ShouldQueue
             } else {
 
                 $data = [
-                    'responsetype' => 'probecheck',
-                    'probeid' => $checkprobe->probeid,
-                    'probestatus' => 'down',
+                    'id' => $this->probe->probeid,
+                    'status' => 'down',
                 ];
 
-                if (config('agentconfig.schooldeskagent.strict_logging') == true) {
-                    \Log::info('Probe was down...');
-                }
-
-                $response = $client->post(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/response', [
+                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/response', [
                     'headers' => [],
                     'body' => json_encode($data),
                 ]);
@@ -100,30 +62,18 @@ class ProbeDispatch implements ShouldQueue
 
         }
 
-        if ($checkprobe->check_type == 'ping') {
+        if ($this->probe->check_type == 'ping') {
 
-            $pingProbe = new PingProbe($checkprobe->name, array(), new \PhpProbe\Adapter\PingAdapter());
-            $pingProbe->host($checkprobe->host);
+            $pingProbe = Process::run('fping -c5 '.$this->probe->host);
 
-            try {
-                $pingProbe->check();
-            } catch (RuntimeException $exception) {
-                \Log::info('An exception occurred');
-            }
-
-            if ($pingProbe->hasSucceeded()) {
+            if ($pingProbe->successful()) {
 
                 $data = [
-                    'responsetype' => 'probecheck',
-                    'probeid' => $checkprobe->probeid,
-                    'probestatus' => 'up',
+                    'id' => $this->probe->probeid,
+                    'status' => 'up',
                 ];
 
-                if (config('agentconfig.schooldeskagent.strict_logging') == true) {
-                    \Log::info('Probe was up...');
-                }
-
-                $response = $client->post(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/response', [
+                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/response', [
                     'headers' => [],
                     'body' => json_encode($data),
                 ]);
@@ -131,16 +81,11 @@ class ProbeDispatch implements ShouldQueue
             } else {
 
                 $data = [
-                    'responsetype' => 'probecheck',
-                    'probeid' => $checkprobe->probeid,
-                    'probestatus' => 'down',
+                    'id' => $this->probe->probeid,
+                    'status' => 'down',
                 ];
 
-                if (config('agentconfig.schooldeskagent.strict_logging') == true) {
-                    \Log::info('Probe was down...');
-                }
-
-                $response = $client->post(config('agentconfig.schooldeskagent.tenant_url') . '/api/agent/response', [
+                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/response', [
                     'headers' => [],
                     'body' => json_encode($data),
                 ]);
