@@ -69,12 +69,17 @@ class KioskRequests extends Command
             try {
                 $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset');
 
-                $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset', [
+                $sdclient = new Client(['verify' => false, 'headers' => array(
+                    'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                    'Content-Type' => 'application/json',
+                )]);
+
+                $srvresponse = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset', [
                     'headers' => [],
                     'body' => json_encode($payload),
                 ]);
 
-                $status = json_decode($response->getBody(), false);
+                $status = json_decode($srvresponse->getBody(), false);
 
                 if($status->status != 'ok')
                 {
