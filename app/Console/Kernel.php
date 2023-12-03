@@ -27,6 +27,9 @@ class Kernel extends ConsoleKernel
         /* Synchronize Local Users */
         $schedule->command('agent:usersync-service')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
 
+        /* Synchronize EMC Users */
+        $schedule->command('agent:edustar-service')->daily()->withoutOverlapping()->runInBackground();
+
     }
 
     /**
