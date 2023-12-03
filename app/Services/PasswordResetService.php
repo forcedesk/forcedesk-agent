@@ -19,6 +19,8 @@ use App\Http\Controllers\Controller;
 use App\Models\EdupassAccounts;
 use App\Models\Students;
 use Illuminate\Support\Facades\Http;
+use LdapRecord\Models\ActiveDirectory\Group as StudentGroup;
+use LdapRecord\Models\ActiveDirectory\User as StudentUser;
 
 class PasswordResetService extends Controller
 {
@@ -123,13 +125,15 @@ class PasswordResetService extends Controller
         $genpassword = ucfirst($dinopassgen);
 
         // We need to find the user based on the username provided instead of LDAP DN.
-        $studentuser = Students::where('username', $username)
+        $studentuser = StudentUser::where('samaccountname', $username)
             ->first();
 
         // Check if there is an Edupass Account.
         $edupassacct = EdupassAccounts::where('login', $username)->first();
 
-        if ($studentuser) {
+        $group = StudentGroup::find(config('agentconfig.ldap.student_scope'));
+
+        if ($studentuser && $studentuser->groups()->exists($group)) {
 
             $studentuser->unicodepwd = $genpassword;
 
