@@ -17,7 +17,7 @@ class Kernel extends ConsoleKernel
     {
 
         /* Check for Kiosk Requests */
-        $schedule->command('agent:kiosk')->everyFifteenSeconds()->withoutOverlapping()->runInBackground();
+        $schedule->command('agent:kiosk')->everyFiveSeconds()->withoutOverlapping()->runInBackground();
 
     }
 
