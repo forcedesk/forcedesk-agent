@@ -47,7 +47,7 @@ class MonitoringChecks extends Command
             return false;
         }
 
-        foreach (json_decode($data->payload_data) as $payload) {
+        foreach ($data['payload_data'] as $payload) {
             ProbeDispatch::dispatch($payload);
         }
 
