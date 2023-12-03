@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Console\Commands\Services;
 
 use App\Models\Students;
 use App\Models\User;
@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use function Laravel\Prompts\progress;
 
-class PapercutCollect extends Command
+class PapercutService extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'agent:papercut-data';
+    protected $signature = 'agent:papercut-service';
 
     /**
      * The console command description.

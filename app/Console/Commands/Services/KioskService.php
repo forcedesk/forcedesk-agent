@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Console\Commands\Services;
 
 use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
+use function App\Console\Commands\config;
 
-class KioskRequests extends Command
+class KioskService extends Command
 {
     protected PasswordResetService $passwordResetService;
 
@@ -20,7 +21,7 @@ class KioskRequests extends Command
      *
      * @var string
      */
-    protected $signature = 'agent:kiosk-requests';
+    protected $signature = 'agent:kiosk-service';
 
     /**
      * The console command description.

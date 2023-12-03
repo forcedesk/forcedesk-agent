@@ -15,9 +15,21 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        $schedule->command('agent:monitoring-checks')->everyMinute()->withoutOverlapping()->runInBackground();
-        $schedule->command('agent:kiosk')->everyFiveSeconds()->withoutOverlapping()->runInBackground();
-        $schedule->command('agent:papercut-data')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
+        /* Process Monitoring Payloads */
+        $schedule->command('agent:monitoring-service')->everyMinute()->withoutOverlapping()->runInBackground();
+
+        /* Check for Kiosk Password Reset Requests */
+        $schedule->command('agent:kiosk-service')->everyFiveSeconds()->withoutOverlapping()->runInBackground();
+
+        /* Synchronize Papercut Data and send to tenant */
+        $schedule->command('agent:papercut-service')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
+
+        /* Synchronize Papercut Data and send to tenant */
+        $schedule->command('agent:papercut-service')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
+
+        /* Synchronize Local Users */
+        $schedule->command('agent:usersync-service')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
+
     }
 
     /**

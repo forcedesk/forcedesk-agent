@@ -1,18 +1,17 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Console\Commands\Services;
 
-use App\Models\User;
 use Illuminate\Console\Command;
 
-class SyncUsers extends Command
+class UserSyncService extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'agent:syncusers';
+    protected $signature = 'agent:usersync-service';
 
     /**
      * The console command description.

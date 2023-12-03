@@ -1,19 +1,20 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Console\Commands\Services;
 
 use App\Jobs\ProbeDispatch;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
+use function App\Console\Commands\config;
 
-class MonitoringChecks extends Command
+class MonitoringService extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'agent:monitoring-checks';
+    protected $signature = 'agent:monitoring-service';
 
     /**
      * The console command description.

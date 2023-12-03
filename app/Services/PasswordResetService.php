@@ -141,8 +141,8 @@ class PasswordResetService extends Controller
                 $studentuser->save();
 
                 return [
-                    'action' => 'authorized',
-                    'password' => $genpassword
+                    'action' => 'declined',
+                    'message' => 'API Error. Contact Vendor.',
                 ];
 
             } catch (\LdapRecord\Exceptions\InsufficientAccessException $ex) {
@@ -153,7 +153,8 @@ class PasswordResetService extends Controller
                 \Log::info($error->getDiagnosticMessage());
 
                 return [
-                    'action' => 'error'
+                    'action' => 'declined',
+                    'message' => 'API Error. Contact Vendor.',
                 ];
 
             } catch (\LdapRecord\Exceptions\ConstraintException $ex) {
@@ -164,7 +165,8 @@ class PasswordResetService extends Controller
                 \Log::info($error->getDiagnosticMessage());
 
                 return [
-                    'action' => 'error'
+                    'action' => 'declined',
+                    'message' => 'API Error. Contact Vendor.',
                 ];
             } catch (\LdapRecord\LdapRecordException $ex) {
 
@@ -175,15 +177,13 @@ class PasswordResetService extends Controller
                 \Log::info($error->getDiagnosticMessage());
 
                 return [
-                    'action' => 'error'
+                    'action' => 'declined',
+                    'message' => 'API Error. Contact Vendor.',
                 ];
             }
         } elseif ($edupassacct) {
 
-            // Find the EdustarMC Integration
-            $integration = \App\Models\Integrations::where('type', 'edustarmc')->first();
-
-            if (empty(config('agentconfig.edustarmc.emc_username')) || empty(config('agentconfig.edustarmc.emc_password')) || empty(config('agentconfig.edustarmc.emc_schoolcode'))) {
+            if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_schoolcode')) || empty(config('agentconfig.emc.emc_url'))) {
 
                 return [
                     'action' => 'declined',
@@ -192,7 +192,6 @@ class PasswordResetService extends Controller
 
             }
 
-            // If the password has been reset in the past 30 minutes, deny the request.
             if ($edupassacct->updated_at->diffInSeconds(\Carbon\Carbon::now()) <= 1800) {
 
                 return [
@@ -206,10 +205,10 @@ class PasswordResetService extends Controller
 
                 $emcpassword = ucwords(self::rp1()).'.'.rand(1000, 9999);
 
-                $response = Http::withBasicAuth(config('agentconfig.edustarmc.emc_username'), config('agentconfig.edustarmc.emc_password'))
+                $response = Http::withBasicAuth(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'))
                     ->retry(5, 100)
-                    ->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', [
-                        'schoolId' => config('agentconfig.edustarmc.emc_schoolcode'),
+                    ->post(config('agentconfig.emc.emc_url'), [
+                        'schoolId' => config('agentconfig.emc.emc_school_code'),
                         'dn' => $edupassacct->ldap_dn,
                         'newPass' => $emcpassword,
                     ]);
