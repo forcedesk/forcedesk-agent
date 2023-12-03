@@ -15,10 +15,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-
-        /* Check for Kiosk Requests */
+        $schedule->command('agent:monitoring-checks')->everyMinute()->withoutOverlapping()->runInBackground();
         $schedule->command('agent:kiosk')->everyFiveSeconds()->withoutOverlapping()->runInBackground();
-
+        $schedule->command('agent:papercut-data')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
     }
 
     /**
