@@ -218,7 +218,7 @@ class PasswordResetService extends Controller
 
                 return [
                     'action' => 'authorized',
-                    'payload' => $emcpassword,
+                    'password' => $emcpassword,
                 ];
 
 
