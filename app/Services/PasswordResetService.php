@@ -17,6 +17,7 @@ namespace App\Services;
 
 use App\Http\Controllers\Controller;
 use App\Models\EdupassAccounts;
+use App\Models\Students;
 use Illuminate\Support\Facades\Http;
 
 class PasswordResetService extends Controller
