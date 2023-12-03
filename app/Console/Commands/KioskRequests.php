@@ -59,9 +59,7 @@ class KioskRequests extends Command
 
         foreach ($data as $item) {
 
-            dd($item);
-
-            $response = $this->passwordResetService->handlePasswordReset($item->kioskid, $item->username);
+            $response = $this->passwordResetService->handlePasswordReset($item->payload_data->kioskid, $item->payload_data->username);
 
             dd($response);
 
