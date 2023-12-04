@@ -6,6 +6,7 @@ use App\Models\Students;
 use App\Models\User;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
+use function Laravel\Prompts\progress;
 
 class PapercutService extends Command
 {
