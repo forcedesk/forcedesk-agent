@@ -10,6 +10,9 @@ return [
         // The UUID of the Agent.
         'tenant_uuid' => '',
     ],
+    'logging' => [
+        'enabled' => false,
+    ],
     'papercut' => [
         'api_url' => '',
         'api_key' => '',
