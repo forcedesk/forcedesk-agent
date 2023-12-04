@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands\Services;
+namespace App\Console\Commands;
 
 use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
