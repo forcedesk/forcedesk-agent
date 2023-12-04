@@ -7,11 +7,19 @@ return [
         'tenant_url' => '',
         // The API key used to connect to the SchoolDesk Tenant.
         'tenant_api_key' => '',
+        // The UUID of the Agent.
+        'tenant_uuid' => '',
     ],
     'papercut' => [
         'api_url' => '',
         'api_key' => '',
         'enabled' => 'true',
+    ],
+    'emc' => [
+        'emc_url' => '',
+        'emc_username' => '',
+        'emc_password' => '',
+        'emc_school_code' => '',
     ],
     'ldap' => [
         // Should be your primary domain controller.

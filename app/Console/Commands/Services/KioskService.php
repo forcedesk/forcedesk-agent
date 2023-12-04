@@ -37,13 +37,11 @@ class KioskService extends Command
     public function handle()
     {
 
-        if(config('agentconfig.agent.strict_logging') == true) {
-            \Log::info('Logging is enabled');
-        }
-
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
+            'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-schooldesk-agentversion' => config('app.agent_version'),
         )]);
 
         $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/kiosk/payloads');
@@ -72,6 +70,8 @@ class KioskService extends Command
                 $sdclient = new Client(['verify' => false, 'headers' => array(
                     'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
                     'Content-Type' => 'application/json',
+                    'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                    'x-schooldesk-agentversion' => config('app.agent_version'),
                 )]);
 
                 $srvresponse = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset', [

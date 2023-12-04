@@ -35,6 +35,8 @@ class PapercutService extends Command
         $sdclient = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
+            'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-schooldesk-agentversion' => config('app.agent_version'),
         )]);
 
         $api_key = config('agentconfig.papercut.api_key');
