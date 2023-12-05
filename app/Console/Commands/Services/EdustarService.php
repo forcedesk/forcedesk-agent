@@ -45,7 +45,9 @@ class EdustarService extends Command
 
         if(!$test)
         {
+            \Log::error('Could not connect to the SchoolDesk instance.');
             $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+            return false;
         }
 
         $importcount = 0;
