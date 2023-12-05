@@ -6,7 +6,7 @@ use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
 
-class TestAgentConnectivity extends Command
+class HeartbeatService extends Command
 {
     public function __construct()
     {
@@ -17,7 +17,7 @@ class TestAgentConnectivity extends Command
      *
      * @var string
      */
-    protected $signature = 'agent:test';
+    protected $signature = 'agent:heartbeat';
 
     /**
      * The console command description.
@@ -41,7 +41,7 @@ class TestAgentConnectivity extends Command
             'x-schooldesk-agentversion' => config('app.agent_version'),
         )]);
 
-        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/test');
+        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/heartbeat');
 
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);
@@ -57,7 +57,7 @@ class TestAgentConnectivity extends Command
                 $this->error($data->message);
                 return false;
             } else {
-                $this->error('Test Failure.');
+                $this->error('Heartbeat Failure.');
                 return false;
             }
 
