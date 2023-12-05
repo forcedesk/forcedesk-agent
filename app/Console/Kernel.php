@@ -33,6 +33,9 @@ class Kernel extends ConsoleKernel
         /* Send Agent Heartbeat */
         $schedule->command('agent:heartbeat')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
 
+        /* Process Command Queues */
+        $schedule->command('agent:process-command-queue')->everyMinute()->withoutOverlapping()->runInBackground();
+
 
     }
 
