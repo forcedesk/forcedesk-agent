@@ -33,7 +33,6 @@ class UserSyncService extends Command
             return false;
         }
 
-
         // Call Artisan to import Staff via the defined LDAP Scope.
         \Artisan::call('ldap:import staff --filter="(memberof='.config('agentconfig.ldap.staff_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
 
