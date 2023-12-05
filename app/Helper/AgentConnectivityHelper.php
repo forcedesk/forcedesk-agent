@@ -35,4 +35,18 @@ class AgentConnectivityHelper
             return false;
         }
     }
+
+    public static function testLdapConnectivity(): bool
+    {
+
+        $test = \Artisan::call('ldap:test');
+
+        if($test)
+        {
+            return true;
+        } else {
+            return false;
+        }
+
+    }
 }
