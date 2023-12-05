@@ -41,6 +41,13 @@ class EdustarService extends Command
     public function handle()
     {
 
+        $test = \App\Helper\AgentConnectivityHelper::testConnectivity();
+
+        if(!$test)
+        {
+            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+        }
+
         $importcount = 0;
         $payload = [];
 
