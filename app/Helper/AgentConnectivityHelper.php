@@ -1,26 +1,21 @@
 <?php
 
-/****************************************************************************
- * SchoolDesk - The School Helpdesk System
- *
- * Copyright © 2019 - Excelion/Samuel Brereton. All Rights Reserved.
- *
- * This file or any other component of SchoolDesk cannot be copied, altered
- * and/or distributed without the express permission of SamueL Brereton.
- *
- * Your use of this software is governed by the SchoolDesk EULA. No warranty
- * is expressed or implied except otherwise laid out in your Support Agreement.
- *
- ***************************************************************************/
-
 namespace App\Helper;
 
 use GuzzleHttp\Client;
 
 class AgentConnectivityHelper
 {
+    /**
+     * Tests connectivity to the SchoolDesk instance
+     * before processing any commands.
+     *
+     * @return bool
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
     public static function testConnectivity(): bool
     {
+
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
