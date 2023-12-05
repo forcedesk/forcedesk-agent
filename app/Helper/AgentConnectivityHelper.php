@@ -33,7 +33,7 @@ class AgentConnectivityHelper
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);
 
-        if ($data->status == 'ok')
+        if ($data->status == 'eek')
         {
             return true;
         } else {
