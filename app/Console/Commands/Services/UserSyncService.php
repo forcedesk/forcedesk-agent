@@ -24,15 +24,6 @@ class UserSyncService extends Command
     public function handle()
     {
 
-        $test = AgentConnectivityHelper::testLdapConnectivity();
-
-        if(!$test)
-        {
-            \Log::error('Could not connect to the SchoolDesk instance.');
-            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
-            return false;
-        }
-
         // Call Artisan to import Staff via the defined LDAP Scope.
         \Artisan::call('ldap:import staff --filter="(memberof='.config('agentconfig.ldap.staff_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
 
