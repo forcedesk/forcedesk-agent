@@ -19,7 +19,7 @@ use GuzzleHttp\Client;
 
 class AgentConnectivityHelper
 {
-    public function testConnectivity()
+    public static function testConnectivity(): bool
     {
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
@@ -35,19 +35,9 @@ class AgentConnectivityHelper
 
         if ($data->status == 'ok')
         {
-            $this->info($data->message);
             return true;
         } else {
-
-            if($data->message)
-            {
-                $this->error($data->message);
-                return false;
-            } else {
-                $this->error('Test Failure.');
-                return false;
-            }
-
+            return false;
         }
     }
 }
