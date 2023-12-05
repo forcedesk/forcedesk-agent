@@ -20,11 +20,6 @@ class UserSyncService extends Command
      */
     protected $description = 'Updates the local user database with the remote source.';
 
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
     public function handle()
     {
         // Call Artisan to import Staff via the defined LDAP Scope.
@@ -32,6 +27,8 @@ class UserSyncService extends Command
 
         // Call Artisan to import Students via the defined LDAP Scope.
         \Artisan::call('ldap:import students --filter="(memberof='.config('agentconfig.ldap.student_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
+
+        return true;
 
     }
 }

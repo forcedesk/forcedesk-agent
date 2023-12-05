@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Services;
 
+use App\Helper\AgentConnectivityHelper;
 use App\Models\EdupassAccounts;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
@@ -41,7 +42,7 @@ class EdustarService extends Command
     public function handle()
     {
 
-        $test = \App\Helper\AgentConnectivityHelper::testConnectivity();
+        $test = AgentConnectivityHelper::testConnectivity();
 
         if(!$test)
         {

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Services;
 
+use App\Helper\AgentConnectivityHelper;
 use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
@@ -36,6 +37,15 @@ class KioskService extends Command
      */
     public function handle()
     {
+
+        $test = AgentConnectivityHelper::testConnectivity();
+
+        if(!$test)
+        {
+            \Log::error('Could not connect to the SchoolDesk instance.');
+            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+            return false;
+        }
 
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),

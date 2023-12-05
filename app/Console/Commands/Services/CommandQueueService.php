@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Services;
 
+use App\Helper\AgentConnectivityHelper;
 use App\Services\PasswordResetService;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
@@ -26,13 +27,17 @@ class CommandQueueService extends Command
      */
     protected $description = 'Run the agent and check for any command queues.';
 
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
-    public function handle(): void
+    public function handle()
     {
+
+        $test = AgentConnectivityHelper::testConnectivity();
+
+        if(!$test)
+        {
+            \Log::error('Could not connect to the SchoolDesk instance.');
+            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+            return false;
+        }
 
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),

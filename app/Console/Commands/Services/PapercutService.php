@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands\Services;
 
+use App\Helper\AgentConnectivityHelper;
+use App\Jobs\PapercutAgent;
 use App\Models\Students;
 use App\Models\User;
 use GuzzleHttp\Client;
@@ -24,14 +26,21 @@ class PapercutService extends Command
      */
     protected $description = 'Retrieves and sends Papercut data to tenant.';
 
-    /**
-     * Execute the console command.
-     *
-     * @return void
-     */
-    public function handle(): void
+    public function handle(): bool
     {
-        \App\Jobs\PapercutAgent::dispatch();
+
+        $test = AgentConnectivityHelper::testConnectivity();
+
+        if(!$test)
+        {
+            \Log::error('Could not connect to the SchoolDesk instance.');
+            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+            return false;
+        }
+
+        PapercutAgent::dispatch();
         $this->info('Papercut Service job dispatched...');
+
+        return true;
     }
 }
