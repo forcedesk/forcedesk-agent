@@ -55,6 +55,13 @@ class CommandQueueService extends Command
 
         foreach($data as $item)
         {
+
+            if($item->type == 'force-sync-edustarmc' && $item->payload_data->process)
+            {
+                /* Fire the console command */
+                \Artisan::call('agent:edustar-service');
+            }
+
             if($item->type == 'force-sync-papercutsvc' && $item->payload_data->process)
             {
                 $test = AgentConnectivityHelper::testConnectivity();
@@ -269,8 +276,9 @@ class CommandQueueService extends Command
                     \Log::error('Could not send data to SchoolDesk Tenant');
                 }
 
-                return true;
             }
         }
+
+        return true;
     }
 }
