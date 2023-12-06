@@ -56,7 +56,7 @@ class CommandQueueService extends Command
         foreach($data as $item)
         {
 
-            if($item->type == 'force-sync-edustarmc' && $item->payload_data->process)
+            if($item->type == 'force-sync-edustarsvc' && $item->payload_data->process)
             {
                 /* Fire the console command */
                 \Artisan::call('agent:edustar-service');
