@@ -52,6 +52,7 @@ class EdustarService extends Command
         }
 
         $importcount = 0;
+        $accounts = [];
         $payload = [];
 
         if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_school_code'))) {
@@ -88,6 +89,8 @@ class EdustarService extends Command
 
                 EdupassAccounts::updateOrCreate(['login' => $data['login']], $data);
 
+                $accounts[] = $data['login'];
+
                 $payload[] = $data;
 
             }
@@ -96,6 +99,12 @@ class EdustarService extends Command
 
             return false;
         }
+
+        /* Delete Accounts that have been removed */
+
+        $del = \App\Models\EduPassAccounts::whereNotIn('login', $accounts)->get();
+
+        dd($del);
 
         try {
 
