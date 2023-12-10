@@ -86,10 +86,7 @@ class EdustarService extends Command
 
                 \Log::info($data);
 
-                if (! $edupassaccount) {
-                    EdupassAccounts::create($data);
-                    $importcount++;
-                }
+                EdupassAccounts::updateOrCreate(['login' => $data['login']], $data);
 
                 $payload[] = $data;
 
