@@ -9,7 +9,7 @@ class EdupassAccounts extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['login', 'firstName', 'lastName', 'displayName', 'password', 'ldap_dn'];
+    protected $fillable = ['login', 'firstName', 'lastName', 'displayName', 'password', 'student_class', 'ldap_dn'];
 
     public function getPasswordAttribute($value)
     {

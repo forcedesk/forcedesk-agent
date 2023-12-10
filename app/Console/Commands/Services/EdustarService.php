@@ -80,6 +80,7 @@ class EdustarService extends Command
                     'lastName' => $item->_lastName,
                     'password' => 'Not Yet Set',
                     'displayName' => $item->_displayName,
+                    'student_class' => $item->_class,
                     'ldap_dn' => $item->_dn,
                 ];
 
