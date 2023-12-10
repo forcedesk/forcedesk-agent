@@ -52,6 +52,7 @@ class EdustarService extends Command
         }
 
         $importcount = 0;
+        $deletecount = 0;
         $accounts = [];
         $payload = [];
 
@@ -93,6 +94,8 @@ class EdustarService extends Command
 
                 $payload[] = $data;
 
+                $importcount++;
+
             }
         } catch (\Exception $e) {
             $this->warn($e->getMessage());
@@ -101,10 +104,14 @@ class EdustarService extends Command
         }
 
         /* Delete Accounts that have been removed */
+        $del_accounts = \App\Models\EduPassAccounts::whereNotIn('login', $accounts)->get();
 
-        $del = \App\Models\EduPassAccounts::whereNotIn('login', $accounts)->get();
-
-        dd($del);
+        foreach($del_accounts as $del_account)
+        {
+            $del_account->delete();
+            $deletecount++;
+        }
+        /* End Delete Old Accounts */
 
         try {
 
@@ -140,7 +147,7 @@ class EdustarService extends Command
             return false;
         }
 
-        $this->info('Imported '.$importcount.' accounts.');
+        $this->info('Deleted '.$deletecount.' accounts.');
 
         return true;
 
