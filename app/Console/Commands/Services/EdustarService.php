@@ -84,6 +84,8 @@ class EdustarService extends Command
                     'ldap_dn' => $item->_dn,
                 ];
 
+                \Log::info($data);
+
                 if (! $edupassaccount) {
                     EdupassAccounts::create($data);
                     $importcount++;
