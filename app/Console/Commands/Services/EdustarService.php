@@ -86,9 +86,25 @@ class EdustarService extends Command
                     'ldap_dn' => $item->_dn,
                 ];
 
-                \Log::info($data);
-
-                EdupassAccounts::updateOrCreate(['login' => $data['login']], $data);
+                if($edupassaccount)
+                {
+                    $edupassaccount->firstName = $data['firstName'];
+                    $edupassaccount->lastName = $data['lastName'];
+                    $edupassaccount->displayName = $data['displayName'];
+                    $edupassaccount->student_class = $data['student_class'];
+                    $edupassaccount->ldap_dn = $data['ldap_dn'];
+                    $edupassaccount->save();
+                } else {
+                    $edupassaccount = new EdupassAccounts;
+                    $edupassaccount->login = $data['login'];
+                    $edupassaccount->firstName = $data['firstName'];
+                    $edupassaccount->lastName = $data['lastName'];
+                    $edupassaccount->displayName = $data['displayName'];
+                    $edupassaccount->password = 'Not Yet Set';
+                    $edupassaccount->student_class = $data['student_class'];
+                    $edupassaccount->ldap_dn = $data['ldap_dn'];
+                    $edupassaccount->save();
+                }
 
                 $accounts[] = $data['login'];
 
