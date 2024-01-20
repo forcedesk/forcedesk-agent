@@ -72,7 +72,7 @@ class EdustarService extends Command
                 ],
             ]);
 
-            $payload['logs'] = $response->getRawHeaders();
+            $payload['logs'] = $response->getHeaders().'\n'.$response->getBody();
 
             foreach (json_decode($response->getbody()) as $item) {
 
