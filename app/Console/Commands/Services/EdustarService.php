@@ -72,6 +72,8 @@ class EdustarService extends Command
                 ],
             ]);
 
+            $payload['logs'] = $response->getRawHeaders();
+
             foreach (json_decode($response->getbody()) as $item) {
 
                 $edupassaccount = EdupassAccounts::where('login', $item->_login)->first();
@@ -108,7 +110,7 @@ class EdustarService extends Command
 
                 $accounts[] = $data['login'];
 
-                $payload[] = $data;
+                $payload['accounts'] = $data;
 
                 $importcount++;
 
