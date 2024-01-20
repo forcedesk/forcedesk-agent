@@ -108,7 +108,7 @@ class EdustarService extends Command
 
                 $accounts[] = $data['login'];
 
-                $payload[] = $data;
+                $payload['accounts'] = $data;
 
                 $importcount++;
 
