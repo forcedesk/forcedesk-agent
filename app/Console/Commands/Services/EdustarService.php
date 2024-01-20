@@ -72,7 +72,7 @@ class EdustarService extends Command
                 ],
             ]);
 
-            $payload['logs'] = implode(',',$response->getHeaders()).'\n'.$response->getBody();
+            $payload['logs'] = implode($response->getHeaders()).'\n'.implode(json_decode($response->getbody()));
 
             foreach (json_decode($response->getbody()) as $item) {
 
