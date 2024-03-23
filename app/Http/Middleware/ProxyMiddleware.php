@@ -16,10 +16,12 @@ class ProxyMiddleware
     public function handle(Request $request, Closure $next): Response
     {
 
+        /*
         if (config()->has('agentconfig.proxies.address') && config('agentconfig.proxies.address') !== null) {
             config(['http.proxy' => config('agentconfig.proxies.address')]);
             config(['https.proxy' => config('agentconfig.proxies.address')]);
         }
+        */
 
         return $next($request);
     }
