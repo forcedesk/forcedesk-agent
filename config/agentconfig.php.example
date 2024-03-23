@@ -18,6 +18,9 @@ return [
         'api_key' => '',
         'enabled' => 'true',
     ],
+    'proxies' => [
+        'address' => null,
+    ],
     'emc' => [
         'emc_url' => '',
         'emc_username' => '',
