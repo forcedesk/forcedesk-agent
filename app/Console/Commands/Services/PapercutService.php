@@ -120,10 +120,9 @@ class PapercutService extends Command
 
                 $data['balance'] = $result['params']['param']['value'];
 
-                /* Push the Data to the array */
-                if(is_numeric($data['balance']) && is_numeric($data['pin']))
+                if(is_numeric($data['balance']) || is_numeric($data['pin']))
                 {
-                    $this->info('Processed PIN and Balance for '.$object->staff_code);
+                    $this->info('Processed PIN or Balance for '.$object->staff_code);
                     $payload['staff'][] = $data;
                 }
 
@@ -203,9 +202,9 @@ class PapercutService extends Command
 
                 /* Push the Data to the array */
 
-                if(is_numeric($data['balance']) && is_numeric($data['pin']))
+                if(is_numeric($data['balance']) || is_numeric($data['pin']))
                 {
-                    $this->info('Processed PIN and Balance for '.$student->username);
+                    $this->info('Processed PIN or Balance for '.$student->username);
                     $payload['students'][] = $data;
                 }
 
