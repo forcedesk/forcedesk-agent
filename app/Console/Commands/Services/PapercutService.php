@@ -176,7 +176,12 @@ class PapercutService extends Command
                 $result = json_decode($jsonFormatData, true);
 
                 $data['username'] = $student->username;
-                $data['pin'] = $result['params']['param']['value'];
+
+                if(is_numeric($result['params']['param']['value'])) {
+                    $data['pin'] = $result['params']['param']['value'];
+                } else {
+                    $data['pin'] = null;
+                }
 
                 /* Grab the Balance */
                 $xml = '<?xml version="1.0"?>
@@ -207,7 +212,11 @@ class PapercutService extends Command
                 $jsonFormatData = json_encode($xmlObject);
                 $result = json_decode($jsonFormatData, true);
 
-                $data['balance'] = $result['params']['param']['value'];
+                if(is_numeric($result['params']['param']['value'])) {
+                    $data['balance'] = $result['params']['param']['value'];
+                } else {
+                    $data['balance'] = null;
+                }
 
                 /* Push the Data to the array */
 
