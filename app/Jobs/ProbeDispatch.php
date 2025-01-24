@@ -112,24 +112,22 @@ class ProbeDispatch implements ShouldQueue
         /* Ping the requested host and return the availability data */
         $pingresult = Process::run("fping -C 5 -q $host");
 
-        /* fping will output to stderr */
-        if ($pingresult->successful()) {
-            return null;
-        } else {
-            $output = $pingresult->errorOutput(); // Should be something like: "8.8.8.8 : 15.12 12.34 10.78 13.45 14.01"
-            preg_match('/: (.+)/', $output, $matches);
-        }
-
-        /* If the data doesn't match the regex, return no data */
-        if (!isset($matches[1])) {
+        /* If the process fails, log or handle the error */
+        if ($pingResult->successful()) {
             return null;
         }
 
-        /* Format the ping times into a singular rounded average. */
-        $pingTimes = explode(' ', trim($matches[1]));
-        $pingdata = (int) round(array_sum($pingTimes) / count($pingTimes));
+        $output = $pingResult->errorOutput();
+        if (preg_match('/: (.+)/', $output, $matches)) {
+            $pingTimes = explode(' ', trim($matches[1]));
+            $pingTimes = array_map('floatval', $pingTimes);
 
-        /* Return the ping time back to the handler */
-        return $pingdata;
+            if (!empty($pingTimes) && count($pingTimes) > 0) {
+                $pingData = (int) round(array_sum($pingTimes) / count($pingTimes));
+                return $pingData;
+            }
+        }
+
+        return null;
     }
 }
