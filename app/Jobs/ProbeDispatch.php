@@ -119,7 +119,7 @@ class ProbeDispatch implements ShouldQueue
         }
 
         $output = $pingresult->errorOutput();
-        if (preg_match('/: (.+)/', $output, $matches)) {
+        if (preg_match('/\s*:\s*(.+)/', $output, $matches)) {
             $pingTimes = explode(' ', trim($matches[1]));
             $pingTimes = array_map('floatval', $pingTimes);
 
