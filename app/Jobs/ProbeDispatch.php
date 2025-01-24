@@ -35,6 +35,8 @@ class ProbeDispatch implements ShouldQueue
         /* Generate Ping Data for Time-Series Graphs */
         $pingdata = $this->generateMetricData($this->probe->host);
 
+        \Log::info($pingdata);
+
         /* Handle a TCP Check */
         if ($this->probe->check_type == 'tcp') {
 
