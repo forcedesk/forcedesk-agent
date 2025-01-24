@@ -129,7 +129,7 @@ class ProbeDispatch implements ShouldQueue
         $pingTimes = explode(' ', trim($matches[1]));
         $pingdata = (int) round(array_sum($pingTimes) / count($pingTimes));
 
-        \Log::info($pingdata);
+        \Log::info($pingresult);
         /* Return the ping time back to the handler */
         return $pingdata;
     }
