@@ -121,7 +121,7 @@ class ProbeDispatch implements ShouldQueue
             $pingTimes = array_map('floatval', $pingTimes);
 
             if (!empty($pingTimes) && count($pingTimes) > 0) {
-                $pingData = (int) round(array_sum($pingTimes) / count($pingTimes));
+                $pingData = array_sum($pingTimes) / count($pingTimes);
                 return $pingData;
             }
         }
