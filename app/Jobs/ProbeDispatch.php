@@ -24,6 +24,7 @@ class ProbeDispatch implements ShouldQueue
     public function handle()
     {
 
+        /* Generate a new Guzzle Client for handling the payload from SchoolDesk */
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
@@ -31,6 +32,10 @@ class ProbeDispatch implements ShouldQueue
             'x-schooldesk-agentversion' => config('app.agent_version'),
         )]);
 
+        /* Generate Ping Data for Time-Series Graphs */
+        $pingdata = $this->generateMetricData($this->probe->host);
+
+        /* Handle a TCP Check */
         if ($this->probe->check_type == 'tcp') {
 
             // Run the probe via the Process facade.
@@ -40,6 +45,7 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
+                    'ping_data' => $pingdata,
                     'status' => 'up',
                 ];
 
@@ -52,6 +58,7 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
+                    'ping_data' => $pingdata,
                     'status' => 'down',
                 ];
 
@@ -64,6 +71,7 @@ class ProbeDispatch implements ShouldQueue
 
         }
 
+        /* Handle a Ping-Only Check */
         if ($this->probe->check_type == 'ping') {
 
             $pingProbe = Process::run('fping -c5 '.$this->probe->host);
@@ -72,6 +80,7 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
+                    'ping_data' => $pingdata,
                     'status' => 'up',
                 ];
 
@@ -84,6 +93,7 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
+                    'ping_data' => $pingdata,
                     'status' => 'down',
                 ];
 
@@ -95,5 +105,31 @@ class ProbeDispatch implements ShouldQueue
             }
 
         }
+    }
+
+    private function generateMetricData(string $host)
+    {
+        /* Ping the requested host and return the availability data */
+        $pingresult = Process::run("fping -C 5 -q $host");
+
+        /* Check if the result has failed otherwise format the ping times using the fping regex */
+        if ($pingresult->failed()) {
+            return null;
+        } else {
+            $output = $pingresult->output(); // Should be something like: "8.8.8.8 : 15.12 12.34 10.78 13.45 14.01"
+            preg_match('/: (.+)/', $output, $matches);
+        }
+
+        /* If the data doesn't match the regex, return no data */
+        if (!isset($matches[1])) {
+            return null;
+        }
+
+        /* Format the ping times into a singular rounded average. */
+        $pingTimes = explode(' ', trim($matches[1]));
+        $pingdata = (int) round(array_sum($pingTimes) / count($pingTimes));
+
+        /* Return the ping time back to the handler */
+        return $pingdata;
     }
 }
