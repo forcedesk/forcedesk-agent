@@ -112,7 +112,10 @@ class ProbeDispatch implements ShouldQueue
         /* Ping the requested host and return the availability data */
         $pingresult = Process::run("fping -C 5 -q $host");
 
-        \Log::info($pingresult->output());
+        $output = $pingresult->output(); // This captures stdout
+        $errorOutput = $pingresult->errorOutput(); // This captures stderr
+
+        \Log::info(['stdout' => $output, 'stderr' => $errorOutput]);
 
         /* Check if the result has failed otherwise format the ping times using the fping regex */
         if ($pingresult->failed()) {
