@@ -113,11 +113,11 @@ class ProbeDispatch implements ShouldQueue
         $pingresult = Process::run("fping -C 5 -q $host");
 
         /* If the process fails, log or handle the error */
-        if ($pingResult->successful()) {
+        if ($pingresult->successful()) {
             return null;
         }
 
-        $output = $pingResult->errorOutput();
+        $output = $pingresult->errorOutput();
         if (preg_match('/: (.+)/', $output, $matches)) {
             $pingTimes = explode(' ', trim($matches[1]));
             $pingTimes = array_map('floatval', $pingTimes);
