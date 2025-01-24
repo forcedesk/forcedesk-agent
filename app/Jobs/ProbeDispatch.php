@@ -110,6 +110,7 @@ class ProbeDispatch implements ShouldQueue
     private function generateMetricData(string $host)
     {
         /* Ping the requested host and return the availability data */
+        \Log::info("fping -C 5 -q $host");
         $pingresult = Process::run("fping -C 5 -q $host");
 
         /* If the process fails, log or handle the error */
