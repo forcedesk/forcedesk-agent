@@ -115,19 +115,19 @@ class ProbeDispatch implements ShouldQueue
 
     private function generateMetricData(string $host)
     {
-        /* Ping the requested host and return the availability data */
-        \Log::info("fping -C 5 -q $host");
-        $pingresult = Process::run("fping -C 5 -q $host");
+        $ping_process = Process::run("fping -C 5 -q $host");
+        $packet_loss_process = Process::run("fping -c 5 -q $host");
 
-        $output = $pingresult->errorOutput();
+        $ping_result = $ping_process->errorOutput();
+        $packet_loss_result = $packet_loss_process->errorOutput();
 
-        if (preg_match('/\d+\/\d+\/(\d+)%/', $output, $lossMatch)) {
+        if (preg_match('/\d+\/\d+\/(\d+)%/', $packet_loss_result, $lossMatch)) {
             $packetLoss = $lossMatch[1];
         } else {
             $packetLoss = null;
         }
 
-        if (preg_match('/\s*:\s*(.+)/', $output, $matches)) {
+        if (preg_match('/\s*:\s*(.+)/', $ping_result, $matches)) {
             $pingTimes = explode(' ', trim($matches[1]));
             $pingTimes = array_map('floatval', $pingTimes);
 
