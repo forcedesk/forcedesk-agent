@@ -47,7 +47,8 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
-                    'ping_data' => $pingdata,
+                    'ping_data' => $pingdata['ping'],
+                    'packet_loss_data' => $pingdata['packet_loss'],
                     'status' => 'up',
                 ];
 
@@ -60,7 +61,8 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
-                    'ping_data' => $pingdata,
+                    'ping_data' => $pingdata['ping'],
+                    'packet_loss_data' => $pingdata['packet_loss'],
                     'status' => 'down',
                 ];
 
