@@ -82,7 +82,8 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
-                    'ping_data' => $pingdata,
+                    'ping_data' => $pingdata['ping'],
+                    'packet_loss_data' => $pingdata['packet_loss'],
                     'status' => 'up',
                 ];
 
@@ -95,7 +96,8 @@ class ProbeDispatch implements ShouldQueue
 
                 $data = [
                     'id' => $this->probe->probeid,
-                    'ping_data' => $pingdata,
+                    'ping_data' => $pingdata['ping'],
+                    'packet_loss_data' => $pingdata['packet_loss'],
                     'status' => 'down',
                 ];
 
@@ -116,13 +118,24 @@ class ProbeDispatch implements ShouldQueue
         $pingresult = Process::run("fping -C 5 -q $host");
 
         $output = $pingresult->errorOutput();
+
+        if (preg_match('/\d+\/\d+\/(\d+)%/', $output, $lossMatch)) {
+            $packetLoss = $lossMatch[1];
+        } else {
+            $packetLoss = null;
+        }
+
         if (preg_match('/\s*:\s*(.+)/', $output, $matches)) {
             $pingTimes = explode(' ', trim($matches[1]));
             $pingTimes = array_map('floatval', $pingTimes);
 
             if (!empty($pingTimes) && count($pingTimes) > 0) {
                 $pingData = array_sum($pingTimes) / count($pingTimes);
-                return $pingData;
+
+                return [
+                    'ping' => $pingData,
+                    'packet_loss' => $packetLoss
+                ];
             }
         }
 
