@@ -4,6 +4,7 @@ namespace App\Console\Commands\Services;
 
 use App\Helper\AgentConnectivityHelper;
 use App\Models\EdupassAccounts;
+use App\Models\EdupassCrtAccounts;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
@@ -83,18 +84,18 @@ class CrtAccountsService extends Command
                     'ldap_dn' => $item->_dn,
                 ];
 
-                if($edupassaccount)
+                if($crtaccount)
                 {
-                    $edupassaccount->displayName = $data['displayName'];
-                    $edupassaccount->ldap_dn = $data['ldap_dn'];
-                    $edupassaccount->save();
+                    $crtaccount->displayName = $data['displayName'];
+                    $crtaccount->ldap_dn = $data['ldap_dn'];
+                    $crtaccount->save();
                 } else {
-                    $edupassaccount = new EdupassAccounts;
-                    $edupassaccount->login = $data['login'];
-                    $edupassaccount->displayName = $data['displayName'];
-                    $edupassaccount->password = $data['daily_password'];
-                    $edupassaccount->ldap_dn = $data['ldap_dn'];
-                    $edupassaccount->save();
+                    $crtaccount = new EdupassCrtAccounts;
+                    $crtaccount->login = $data['login'];
+                    $crtaccount->displayName = $data['displayName'];
+                    $crtaccount->daily_password = $data['daily_password'];
+                    $crtaccount->ldap_dn = $data['ldap_dn'];
+                    $crtaccount->save();
                 }
 
                 $accounts[] = $data['login'];
@@ -111,7 +112,7 @@ class CrtAccountsService extends Command
         }
 
         /* Delete Accounts that have been removed */
-        $del_accounts = \App\Models\EduPassAccounts::whereNotIn('login', $accounts)->get();
+        $del_accounts = EduPassCrtAccounts::whereNotIn('login', $accounts)->get();
 
         foreach($del_accounts as $del_account)
         {
@@ -129,9 +130,9 @@ class CrtAccountsService extends Command
                 'x-schooldesk-agentversion' => config('app.agent_version'),
             )]);
 
-            $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/edustar-data');
+            $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/crtaccount-data');
 
-            $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/edustar-data', [
+            $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/crtaccount-data', [
                 'headers' => [],
                 'body' => json_encode($payload),
             ]);

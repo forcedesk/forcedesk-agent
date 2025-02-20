@@ -17,6 +17,7 @@
         "laravel/sanctum": "^3.3",
         "laravel/tinker": "^2.8",
         "php-http/discovery": "^1.19",
+        "predis/predis": "^2.3",
         "sentry/sentry-laravel": "^4.10",
         "symfony/finder": "^6.3"
     },
