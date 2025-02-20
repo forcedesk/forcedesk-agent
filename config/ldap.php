@@ -29,7 +29,7 @@ return [
     'connections' => [
 
         'default' => [
-            'hosts' => [config('agentconfig.ldap.ad_dc')],
+            'hosts' => !empty(config('agentconfig.ldap.ad_dc')) ? [config('agentconfig.ldap.ad_dc')] : [],
             'username' => env('LDAP_USERNAME', config('agentconfig.ldap.ad_svc_user_cn')),
             'password' => env('LDAP_PASSWORD', config('agentconfig.ldap.ad_svc_password')),
             'port' => env('LDAP_PORT', 636),
@@ -40,7 +40,7 @@ return [
         ],
 
         'ldap' => [
-            'hosts' => [config('agentconfig.ldap.ad_dc')],
+            'hosts' => !empty(config('agentconfig.ldap.ad_dc')) ? [config('agentconfig.ldap.ad_dc')] : [],
             'username' => env('LDAP_USERNAME', config('agentconfig.ldap.ad_svc_user_cn')),
             'password' => env('LDAP_PASSWORD', config('agentconfig.ldap.ad_svc_password')),
             'port' => env('LDAP_PORT', 636),
