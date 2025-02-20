@@ -16,7 +16,7 @@ class CrtAccountsService extends Command
      *
      * @var string
      */
-    protected $signature = 'agent:crtaccounts-service';
+    protected $signature = 'agent:crtaccount-service';
 
     /**
      * The console command description.

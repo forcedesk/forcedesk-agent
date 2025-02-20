@@ -30,6 +30,9 @@ class Kernel extends ConsoleKernel
         /* Synchronize EMC Users */
         $schedule->command('agent:edustar-service')->daily()->withoutOverlapping()->runInBackground();
 
+        /* Synchronize CRT Accounts Users */
+        $schedule->command('agent:crtaccount-service')->daily()->withoutOverlapping()->runInBackground();
+
         /* Send Agent Heartbeat */
         $schedule->command('agent:heartbeat')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
 
