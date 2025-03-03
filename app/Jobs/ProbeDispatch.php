@@ -28,8 +28,8 @@ class ProbeDispatch implements ShouldQueue
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
-            'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
-            'x-schooldesk-agentversion' => config('app.agent_version'),
+            'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-forcedesk-agentversion' => config('app.agent_version'),
         )]);
 
         /* Generate Ping Data for Time-Series Graphs */

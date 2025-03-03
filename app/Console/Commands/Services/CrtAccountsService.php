@@ -126,8 +126,8 @@ class CrtAccountsService extends Command
             $sdclient = new Client(['verify' => false, 'headers' => array(
                 'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
-                'x-schooldesk-agentversion' => config('app.agent_version'),
+                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agentversion' => config('app.agent_version'),
             )]);
 
             $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/crtaccount-data');

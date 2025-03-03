@@ -43,8 +43,8 @@ class MonitoringService extends Command
         $client = new Client(['verify' => false, 'headers' => array(
             'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
-            'x-schooldesk-agent' => config('agentconfig.tenant.tenant_uuid'),
-            'x-schooldesk-agentversion' => config('app.agent_version'),
+            'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-forcedesk-agentversion' => config('app.agent_version'),
         )]);
 
         $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/getpayloads');
