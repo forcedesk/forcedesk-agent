@@ -1,8 +1,8 @@
 {
-    "name": "schooldesk/schooldesk-agent",
+    "name": "forcedesk/forcedesk-agent",
     "type": "project",
-    "description": "The SchoolDesk Agent collects data and reports to the cloud hosted tenant.",
-    "keywords": ["schooldesk", "agent"],
+    "description": "The ForceDesk Agent collects data and reports to the cloud hosted tenant.",
+    "keywords": ["forcedesk", "agent"],
     "license": "proprietary",
     "require": {
         "php": "^8.2",
