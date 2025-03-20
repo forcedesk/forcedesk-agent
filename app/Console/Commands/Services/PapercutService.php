@@ -3,6 +3,7 @@
 namespace App\Console\Commands\Services;
 
 use App\Helper\AgentConnectivityHelper;
+use App\Models\EdupassAccounts;
 use App\Models\Students;
 use App\Models\User;
 use GuzzleHttp\Client;
@@ -46,7 +47,7 @@ class PapercutService extends Command
         $api_key = config('agentconfig.papercut.api_key');
         $api_url = config('agentconfig.papercut.api_url');
 
-        $students = Students::whereNotNull('username')->orderby('username','asc')->get();
+        $students = EdupassAccounts::whereNotNull('login')->orderby('login','asc')->get();
         $staff = User::whereNotNull('staff_code')->orderby('staff_code','asc')->get();
 
         if (!$students && !$staff) {
@@ -155,7 +156,7 @@ class PapercutService extends Command
                     <value>' . $api_key . '</value>
                     </param>
                     <param>
-                    <value>' . $student->username . '</value>
+                    <value>' . $student->login . '</value>
                     </param>
                     <param>
                     <value>secondary-card-number</value>
@@ -175,7 +176,7 @@ class PapercutService extends Command
                 $jsonFormatData = json_encode($xmlObject);
                 $result = json_decode($jsonFormatData, true);
 
-                $data['username'] = $student->username;
+                $data['username'] = $student->login;
 
                 if(is_numeric($result['params']['param']['value'])) {
                     $data['pin'] = $result['params']['param']['value'];
@@ -192,7 +193,7 @@ class PapercutService extends Command
                     <value>' . $api_key . '</value>
                     </param>
                     <param>
-                    <value>' . $student->username . '</value>
+                    <value>' . $student->login . '</value>
                     </param>
                     <param>
                     <value>balance</value>
@@ -222,7 +223,7 @@ class PapercutService extends Command
 
                 if(is_numeric($data['balance']) || is_numeric($data['pin']))
                 {
-                    $this->info('Processed PIN or Balance for '.$student->username);
+                    $this->info('Processed PIN or Balance for '.$student->login);
                     $payload['students'][] = $data;
                 }
 
@@ -230,7 +231,7 @@ class PapercutService extends Command
             {
                 \Log::error($e->getMessage());
                 \Log::error($e->getTraceAsString());
-                \Log::error('Could not get Papercut Data for '.$student->username);
+                \Log::error('Could not get Papercut Data for '.$student->login);
             }
 
         }
