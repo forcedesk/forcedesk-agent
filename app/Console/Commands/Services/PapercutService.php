@@ -178,7 +178,9 @@ class PapercutService extends Command
 
                 $data['username'] = $student->login;
 
-                if(is_numeric($result['params']['param']['value'])) {
+                if (!empty($result['params']) &&
+                    isset($result['params']['param']['value']) &&
+                    is_numeric($result['params']['param']['value'])) {
                     $data['pin'] = $result['params']['param']['value'];
                 } else {
                     $data['pin'] = null;
@@ -213,7 +215,9 @@ class PapercutService extends Command
                 $jsonFormatData = json_encode($xmlObject);
                 $result = json_decode($jsonFormatData, true);
 
-                if(is_numeric($result['params']['param']['value'])) {
+                if (!empty($result['params']) &&
+                    isset($result['params']['param']['value']) &&
+                    is_numeric($result['params']['param']['value'])) {
                     $data['balance'] = $result['params']['param']['value'];
                 } else {
                     $data['balance'] = null;
