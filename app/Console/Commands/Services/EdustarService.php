@@ -7,6 +7,8 @@ use App\Models\EdupassAccounts;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 
 class EdustarService extends Command
 {
@@ -32,6 +34,13 @@ class EdustarService extends Command
     public function __construct()
     {
         parent::__construct();
+    }
+
+    private function generateRandomWord(): string
+    {
+        $phrases = ['wild', 'wood', 'frog', 'beast', 'lion', 'zebra', 'marmoset', 'unicorn', 'rabbit', 'bear', 'float', 'berry', 'puppy', 'cat', 'horse', 'river', 'ocean', 'skies', 'sky', 'golden', 'pear', 'apple', 'raspberry', 'watermelon', 'kiwi', 'basket', 'soccer', 'football', 'jazz', 'fair', 'field', 'insect', 'stick', 'jump', 'bridge', 'log', 'abacus', 'tinsel', 'coat', 'door', 'window', 'free', 'peach', 'cress', 'creek', 'croak', 'crest', 'dino', 'rascal', 'clifford', 'franklin', 'zelda', 'link', 'mario', 'bowser'];
+
+        return $phrases[array_rand($phrases)];
     }
 
     /**
@@ -95,6 +104,17 @@ class EdustarService extends Command
                     $edupassaccount->ldap_dn = $data['ldap_dn'];
                     $edupassaccount->save();
                 } else {
+
+                    /* We also want to set a password for the account */
+                    $genpassword = ucwords($this->generateRandomWord()).'.'.rand(1000, 9999);
+
+                    try {
+                        Http::withBasicAuth(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'))->retry(5, 100)->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', ['schoolId' => config('agentconfig.emc.emc_school_code'), 'dn' => $data['ldap_dn'], 'newPass' => $genpassword]);
+                    } catch (ConnectionException) {
+                        \Log::error('Could not reset student password for '.$item->_login);
+                    }
+
+
                     $edupassaccount = new EdupassAccounts;
                     $edupassaccount->login = $data['login'];
                     $edupassaccount->firstName = $data['firstName'];
