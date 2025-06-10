@@ -114,13 +114,12 @@ class EdustarService extends Command
                         \Log::error('Could not reset student password for '.$item->_login);
                     }
 
-
                     $edupassaccount = new EdupassAccounts;
                     $edupassaccount->login = $data['login'];
                     $edupassaccount->firstName = $data['firstName'];
                     $edupassaccount->lastName = $data['lastName'];
                     $edupassaccount->displayName = $data['displayName'];
-                    $edupassaccount->password = 'Not Yet Set';
+                    $edupassaccount->password = $genpassword;
                     $edupassaccount->student_class = $data['student_class'];
                     $edupassaccount->ldap_dn = $data['ldap_dn'];
                     $edupassaccount->save();
