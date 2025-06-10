@@ -85,11 +85,14 @@ class EdustarService extends Command
 
                 $edupassaccount = EdupassAccounts::where('login', $item->_login)->first();
 
+                /* We also want to set a password for the account */
+                $genpassword = ucwords($this->generateRandomWord()).'.'.rand(1000, 9999);
+
                 $data = [
                     'login' => $item->_login,
                     'firstName' => $item->_firstName,
                     'lastName' => $item->_lastName,
-                    'password' => 'Not Yet Set',
+                    'password' => $genpassword,
                     'displayName' => $item->_displayName,
                     'student_class' => $item->_class,
                     'ldap_dn' => $item->_dn,
@@ -104,9 +107,6 @@ class EdustarService extends Command
                     $edupassaccount->ldap_dn = $data['ldap_dn'];
                     $edupassaccount->save();
                 } else {
-
-                    /* We also want to set a password for the account */
-                    $genpassword = ucwords($this->generateRandomWord()).'.'.rand(1000, 9999);
 
                     try {
                         Http::withBasicAuth(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'))->retry(5, 100)->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', ['schoolId' => config('agentconfig.emc.emc_school_code'), 'dn' => $data['ldap_dn'], 'newPass' => $genpassword]);
