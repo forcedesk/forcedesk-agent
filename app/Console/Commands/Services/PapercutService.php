@@ -176,7 +176,7 @@ class PapercutService extends Command
                 $jsonFormatData = json_encode($xmlObject);
                 $result = json_decode($jsonFormatData, true);
 
-                $data['username'] = $student->login;
+                $data['login'] = $student->login;
 
                 if (!empty($result['params']) &&
                     isset($result['params']['param']['value']) &&
