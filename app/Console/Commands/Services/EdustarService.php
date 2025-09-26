@@ -81,6 +81,8 @@ class EdustarService extends Command
                 ],
             ]);
 
+            dd($response->getBody());
+
             foreach (json_decode($response->getbody()) as $item) {
 
                 $edupassaccount = EdupassAccounts::where('login', $item->_login)->first();
