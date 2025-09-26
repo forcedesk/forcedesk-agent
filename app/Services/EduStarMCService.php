@@ -6,12 +6,14 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use GuzzleHttp\Cookie\CookieJar;
 use Exception;
 
 class EduStarMCService
 {
     private ?PendingRequest $httpClient = null;
     private ?array $connection = null;
+    private ?CookieJar $cookieJar = null;
     private array $defaultHeaders;
     private string $username;
     private string $password;
@@ -39,6 +41,7 @@ class EduStarMCService
         // Clear any existing session
         $this->connection = null;
         $this->httpClient = null;
+        $this->cookieJar = null;
         $this->username = $username;
         $this->password = $password;
 
@@ -54,9 +57,12 @@ class EduStarMCService
             Log::info("Connection attempt {$attempt} of {$maxAttempts}...");
 
             try {
+                // Create cookie jar for session management
+                $this->cookieJar = new CookieJar();
+
                 // Create new HTTP client with cookie jar
                 $this->httpClient = Http::withOptions([
-                    'cookies' => true, // Enable cookie jar
+                    'cookies' => $this->cookieJar,
                 ])
                     ->withHeaders([
                         'User-Agent' => $this->defaultHeaders['User-Agent'],
@@ -135,9 +141,10 @@ class EduStarMCService
                 $newSessionUrl = "https://apps.edustar.vic.edu.au/logon.php3?{$newsessionUri}";
                 Log::info("Creating new session via: {$newSessionUrl}");
 
-                // Create new HTTP client for clean session
+                // Create new cookie jar and HTTP client for clean session
+                $this->cookieJar = new CookieJar();
                 $this->httpClient = Http::withOptions([
-                    'cookies' => true, // Enable cookie jar
+                    'cookies' => $this->cookieJar,
                 ])
                     ->withHeaders($this->defaultHeaders)
                     ->timeout(30);
@@ -284,6 +291,17 @@ class EduStarMCService
     {
         $this->connection = null;
         $this->httpClient = null;
+        $this->cookieJar = null;
         Log::info('Disconnected from eduSTAR MC');
+    }
+
+    /**
+     * Get the cookie jar for debugging purposes.
+     *
+     * @return CookieJar|null
+     */
+    public function getCookieJar(): ?CookieJar
+    {
+        return $this->cookieJar;
     }
 }
