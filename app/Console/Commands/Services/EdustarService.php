@@ -80,6 +80,8 @@ class EdustarService extends Command
             $authService->connect(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'));
             $response = $authService->makeApiCall($url);
 
+            dd($response);
+
             foreach (json_decode($response->getbody()) as $item) {
 
                 $edupassaccount = EdupassAccounts::where('login', $item->_login)->first();
