@@ -129,7 +129,10 @@ class EdustarAuthService
                 }
 
                 // Store session cookies for subsequent requests
-                $this->session = $this->extractCookies($authResponse);
+                $authCookies = $this->extractCookies($authResponse);
+                // Merge with existing cookies, giving priority to auth response cookies
+                $this->session = array_merge($cookies, $authCookies);
+                Log::debug("Final session cookies: " . (!empty($this->session) ? count($this->session) . " cookies" : "No cookies"));
 
                 Log::info("Testing API access...");
                 $connectionTest = $this->testConnection();
@@ -224,18 +227,31 @@ class EdustarAuthService
         $cookies = [];
         $setCookieHeaders = $response->header('Set-Cookie');
 
+        // Laravel's HTTP client might return different formats
         if (is_string($setCookieHeaders)) {
             $setCookieHeaders = [$setCookieHeaders];
+        } elseif (!is_array($setCookieHeaders)) {
+            // Try to get all headers and filter Set-Cookie
+            $allHeaders = $response->headers();
+            $setCookieHeaders = [];
+
+            foreach ($allHeaders as $name => $values) {
+                if (strtolower($name) === 'set-cookie') {
+                    $setCookieHeaders = is_array($values) ? $values : [$values];
+                    break;
+                }
+            }
         }
 
         if (is_array($setCookieHeaders)) {
             foreach ($setCookieHeaders as $cookieHeader) {
                 if (preg_match('/^([^=]+)=([^;]+)/', $cookieHeader, $matches)) {
-                    $cookies[$matches[1]] = $matches[2];
+                    $cookies[trim($matches[1])] = trim($matches[2]);
                 }
             }
         }
 
+        Log::debug("Extracted cookies from response: " . json_encode(array_keys($cookies)));
         return $cookies;
     }
 
