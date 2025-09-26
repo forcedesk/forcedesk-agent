@@ -80,7 +80,7 @@ class EdustarService extends Command
             $authService->connect(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'));
             $response = $authService->makeApiCall($url);
 
-            dd($response->getBody());
+            dd(json_decode($response->getBody()));
 
             foreach (json_decode($response->getbody()) as $item) {
 
