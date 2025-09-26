@@ -237,9 +237,9 @@ class TestEduSTARConnection extends Command
     }
 
     /**
-     * Test GetStudents API endpoint
+     * Display students data in a formatted way
      */
-    private function testGetStudentsAPI(EduSTARAuthService $authService, string $schoolNumber): void
+    private function testGetStudentsAPI(EdustarAuthService $authService, string $schoolNumber): void
     {
         $this->info('👥 Testing GetStudents API:');
 
@@ -271,37 +271,24 @@ class TestEduSTARConnection extends Command
             ];
 
             $this->table(['Property', 'Value'], array_slice($responseDetails, 1));
+            $this->newLine();
 
             if ($response->successful()) {
-                $this->newLine();
                 $this->info('✅ GetStudents API Request Successful!');
+                $this->newLine();
 
-                // Try to parse JSON response
-                try {
-                    $data = $response->json();
-                    $this->displayStudentsData($data, $schoolNumber);
-                } catch (Exception $e) {
-                    $this->warn('Response is not valid JSON, displaying raw content preview:');
-                    $this->displayRawResponse($response->body());
-                }
+                $this->info('📄 Raw Response Body:');
+                $this->line('----------------------------------------');
+                $this->line($response->body());
+                $this->line('----------------------------------------');
             } else {
                 $this->error('❌ GetStudents API Request Failed!');
                 $this->newLine();
 
-                // Show error details
-                $this->warn('Error Response:');
-                $errorContent = $response->body();
-
-                if (!empty($errorContent)) {
-                    try {
-                        $errorData = $response->json();
-                        $this->displayJsonData($errorData, 'Error Details');
-                    } catch (Exception $e) {
-                        $this->displayRawResponse($errorContent);
-                    }
-                } else {
-                    $this->line('No error content returned');
-                }
+                $this->warn('📄 Raw Error Response Body:');
+                $this->line('----------------------------------------');
+                $this->line($response->body());
+                $this->line('----------------------------------------');
             }
 
         } catch (Exception $e) {
@@ -313,91 +300,6 @@ class TestEduSTARConnection extends Command
                 $this->warn('Stack trace:');
                 $this->line($e->getTraceAsString());
             }
-        }
-    }
-
-    /**
-     * Display students data in a formatted way
-     */
-    private function displayStudentsData(array $data, string $schoolNumber): void
-    {
-        $this->newLine();
-        $this->info("📚 Students Data for School {$schoolNumber}:");
-
-        if (empty($data)) {
-            $this->warn('No student data returned');
-            return;
-        }
-
-        // Check if it's an array of students or wrapped data
-        $students = $data;
-        if (isset($data['students'])) {
-            $students = $data['students'];
-        } elseif (isset($data['data'])) {
-            $students = $data['data'];
-        } elseif (isset($data[0]) && is_array($data[0])) {
-            $students = $data;
-        }
-
-        if (is_array($students) && !empty($students)) {
-            $this->info("📈 Summary:");
-            $summaryTable = [
-                ['Total Students', count($students)],
-            ];
-
-            // Analyze student data structure
-            if (!empty($students[0])) {
-                $firstStudent = $students[0];
-                $summaryTable[] = ['Fields per Student', count($firstStudent)];
-
-                // Show available fields
-                $this->newLine();
-                $this->info("🏷️  Available Student Fields:");
-                $fields = array_keys($firstStudent);
-                $fieldChunks = array_chunk($fields, 4);
-                foreach ($fieldChunks as $chunk) {
-                    $this->line('  • ' . implode(', ', $chunk));
-                }
-            }
-
-            $this->newLine();
-            $this->table(['Property', 'Value'], $summaryTable);
-
-            // Display sample students (first 5)
-            $this->newLine();
-            $this->info("👥 Sample Students (first 5):");
-
-            $sampleStudents = array_slice($students, 0, 5);
-            $studentTable = [];
-
-            foreach ($sampleStudents as $index => $student) {
-                $displayFields = [];
-
-                // Try common field names
-                $possibleNameFields = ['name', 'fullName', 'firstName', 'student_name', 'Name', 'FullName'];
-                $possibleIdFields = ['id', 'studentId', 'student_id', 'ID', 'StudentID'];
-                $possibleYearFields = ['year', 'yearLevel', 'grade', 'Year', 'YearLevel'];
-
-                $name = $this->findFieldValue($student, $possibleNameFields) ?? 'Unknown';
-                $id = $this->findFieldValue($student, $possibleIdFields) ?? 'N/A';
-                $year = $this->findFieldValue($student, $possibleYearFields) ?? 'N/A';
-
-                $studentTable[] = [
-                    $index + 1,
-                    $name,
-                    $id,
-                    $year
-                ];
-            }
-
-            $this->table(['#', 'Name', 'ID', 'Year'], $studentTable);
-
-            if (count($students) > 5) {
-                $this->info("... and " . (count($students) - 5) . " more students");
-            }
-
-        } else {
-            $this->displayJsonData($data, 'Raw Response Data');
         }
     }
 
