@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\EdustarAuthService;
+use App\Services\EduStarMCService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -14,449 +14,300 @@ class TestEduSTARConnection extends Command
      *
      * @var string
      */
-    protected $signature = 'edustar:test-connection
-                            {username? : The username to authenticate with}
-                            {password? : The password to authenticate with}
-                            {school-number? : The school number for API testing}
-                            {--attempts=3 : Maximum number of connection attempts}
-                            {--debug : Enable debug output}
-                            {--no-cookies : Don\'t display cookie values}
-                            {--skip-students : Skip the GetStudents API test}';
+    protected $signature = 'edustar:test
+                            {--username= : Username for authentication}
+                            {--password= : Password for authentication}
+                            {--interactive : Prompt for credentials interactively}
+                            {--api-test : Test API calls after connection}
+                            {--verbose : Show detailed output}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Test connection to EduSTAR, dump connection details, and test GetStudents API';
+    protected $description = 'Test connection to eduSTAR Management Console';
+
+    /**
+     * The EduStarMCService instance.
+     *
+     * @var EduStarMCService
+     */
+    protected EduStarMCService $eduStarService;
+
+    /**
+     * Create a new command instance.
+     *
+     * @param EduStarMCService $eduStarService
+     */
+    public function __construct(EduStarMCService $eduStarService)
+    {
+        parent::__construct();
+        $this->eduStarService = $eduStarService;
+    }
 
     /**
      * Execute the console command.
+     *
+     * @return int
      */
     public function handle()
     {
-        $this->info('🔌 Testing EduSTAR Connection...');
+        $this->info('🚀 Starting eduSTAR Management Console Connection Test');
         $this->newLine();
 
-        // Get credentials
-        $username = $this->argument('username') ?? $this->ask('Username');
-        $password = $this->argument('password') ?? $this->secret('Password');
-        $schoolNumber = $this->argument('school-number') ?? $this->ask('School Number');
+        try {
+            // Get credentials
+            $credentials = $this->getCredentials();
+            if (!$credentials) {
+                $this->error('❌ No valid credentials provided');
+                return Command::FAILURE;
+            }
 
-        if (empty($username) || empty($password)) {
-            $this->error('Username and password are required!');
-            return Command::FAILURE;
-        }
+            // Test connection
+            $this->testConnection($credentials['username'], $credentials['password']);
 
-        if (empty($schoolNumber)) {
-            $this->error('School number is required!');
-            return Command::FAILURE;
-        }
+            // Test API calls if requested
+            if ($this->option('api-test')) {
+                $this->testApiCalls();
+            }
 
-        // Validate school number format
-        if (!preg_match('/^\d{4}$/', $schoolNumber)) {
-            $this->error('School number must be a 4-digit number!');
-            return Command::FAILURE;
-        }
-
-        $maxAttempts = (int) $this->option('attempts');
-        $debug = $this->option('debug');
-        $showCookies = !$this->option('no-cookies');
-        $skipStudents = $this->option('skip-students');
-
-        // Configure logging for debug mode
-        if ($debug) {
-            $this->info('Debug mode enabled - check logs for detailed output');
             $this->newLine();
+            $this->info('✅ All tests completed successfully!');
+            return Command::SUCCESS;
+
+        } catch (Exception $e) {
+            $this->newLine();
+            $this->error("❌ Test failed: {$e->getMessage()}");
+
+            if ($this->option('verbose')) {
+                $this->error("Stack trace: {$e->getTraceAsString()}");
+            }
+
+            return Command::FAILURE;
         }
+    }
+
+    /**
+     * Get credentials from various sources.
+     *
+     * @return array|null
+     */
+    protected function getCredentials(): ?array
+    {
+        $username = null;
+        $password = null;
+
+        // Option 1: Interactive mode
+        if ($this->option('interactive')) {
+            $this->info('🔐 Enter your eduSTAR credentials:');
+            $username = $this->ask('Username');
+            $password = $this->secret('Password');
+        }
+        // Option 2: Command line options
+        elseif ($this->option('username') && $this->option('password')) {
+            $username = $this->option('username');
+            $password = $this->option('password');
+            $this->info('🔐 Using credentials from command options');
+        }
+        // Option 3: Environment variables
+        elseif (config('edustar.username') && config('edustar.password')) {
+            $username = config('edustar.username');
+            $password = config('edustar.password');
+            $this->info('🔐 Using credentials from configuration');
+        }
+        // Option 4: Fallback to environment variables directly
+        elseif (env('EDUSTAR_USERNAME') && env('EDUSTAR_PASSWORD')) {
+            $username = env('EDUSTAR_USERNAME');
+            $password = env('EDUSTAR_PASSWORD');
+            $this->info('🔐 Using credentials from environment variables');
+        }
+
+        if (!$username || !$password) {
+            $this->warn('⚠️  No credentials found. Please use one of these methods:');
+            $this->line('  1. --interactive flag to enter credentials');
+            $this->line('  2. --username and --password options');
+            $this->line('  3. Set EDUSTAR_USERNAME and EDUSTAR_PASSWORD in .env');
+            $this->line('  4. Configure in config/edustar.php');
+            return null;
+        }
+
+        return [
+            'username' => $username,
+            'password' => $password,
+        ];
+    }
+
+    /**
+     * Test the connection to eduSTAR MC.
+     *
+     * @param string $username
+     * @param string $password
+     * @throws Exception
+     */
+    protected function testConnection(string $username, string $password): void
+    {
+        $this->info('🔗 Testing connection to eduSTAR Management Console...');
+        $this->newLine();
+
+        $startTime = microtime(true);
+
+        // Show progress bar for connection attempts
+        $progressBar = $this->output->createProgressBar(3);
+        $progressBar->setFormat('Connecting... %current%/%max% [%bar%] %message%');
+        $progressBar->setMessage('Initializing...');
+        $progressBar->start();
 
         try {
-            // Create service instance
-            $authService = new EduSTARAuthService($maxAttempts);
+            // Capture log messages if verbose mode is on
+            if ($this->option('verbose')) {
+                Log::listen(function ($level, $message, $context) {
+                    if (str_contains($message, 'eduSTAR') || str_contains($message, 'Connection')) {
+                        $this->line("\n[{$level}] {$message}");
+                    }
+                });
+            }
 
-            $this->info("Attempting to connect with {$maxAttempts} max attempts...");
-
-            // Create progress bar
-            $progressBar = $this->output->createProgressBar($maxAttempts);
-            $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %message%');
-            $progressBar->setMessage('Initializing...');
-            $progressBar->start();
-
-            // Attempt connection
-            $startTime = microtime(true);
-            $connection = $authService->connect($username, $password);
-            $endTime = microtime(true);
-
+            $connection = $this->eduStarService->connect($username, $password);
             $progressBar->finish();
-            $this->newLine(2);
 
-            // Display success message
-            $this->info('✅ Connection Successful!');
-            $this->info("⏱️  Connected in " . round($endTime - $startTime, 2) . " seconds");
+            $endTime = microtime(true);
+            $duration = round($endTime - $startTime, 2);
+
+            $this->newLine(2);
+            $this->info("✅ Successfully connected in {$duration} seconds");
             $this->newLine();
 
             // Display connection details
             $this->displayConnectionDetails($connection);
-            $this->newLine();
-
-            // Display session cookies if requested
-            if ($showCookies) {
-                $this->displayCookieDetails($authService);
-                $this->newLine();
-            }
-
-            // Test API capabilities
-            $this->testApiCapabilities($authService);
-            $this->newLine();
-
-            // Test GetStudents API if not skipped
-            if (!$skipStudents) {
-                $this->testGetStudentsAPI($authService, $schoolNumber);
-            }
-
-            return Command::SUCCESS;
 
         } catch (Exception $e) {
-            if (isset($progressBar)) {
-                $progressBar->finish();
-                $this->newLine(2);
-            }
-
-            $this->error('❌ Connection Failed!');
-            $this->error("Error: {$e->getMessage()}");
-            $this->newLine();
-
-            if ($debug) {
-                $this->warn('Stack trace:');
-                $this->line($e->getTraceAsString());
-            }
-
-            return Command::FAILURE;
+            $progressBar->finish();
+            $this->newLine(2);
+            throw $e;
         }
     }
 
     /**
-     * Display connection details in a formatted table
+     * Display connection details in a formatted table.
+     *
+     * @param array $connection
      */
-    private function displayConnectionDetails(array $connection): void
+    protected function displayConnectionDetails(array $connection): void
     {
-        $this->info('📋 Connection Details:');
+        $this->info('📊 Connection Details:');
 
-        $details = [
-            ['Property', 'Value'],
-            ['Status', $connection['connected'] ? '✅ Connected' : '❌ Disconnected'],
-            ['Logged in as', $connection['logged_in_as']],
-            ['Schools available', $connection['schools']],
+        $headers = ['Property', 'Value'];
+        $rows = [
+            ['Status', $connection['connected'] ? '✅ Connected' : '❌ Not Connected'],
+            ['Logged in as', $connection['logged_in_as'] ?? 'Unknown'],
+            ['Schools accessible', $connection['schools'] ?? 0],
         ];
 
-        $this->table(['Property', 'Value'], array_slice($details, 1));
+        $this->table($headers, $rows);
 
-        // Display user details if available
-        if (!empty($connection['user_details'])) {
+        if ($this->option('verbose') && !empty($connection['user_details'])) {
             $this->newLine();
             $this->info('👤 User Details:');
+            $userDetails = $connection['user_details'];
 
-            $userDetails = [];
-            $this->flattenArray($connection['user_details'], $userDetails);
-
-            $userTable = [];
+            $userRows = [];
             foreach ($userDetails as $key => $value) {
-                if (is_scalar($value) && !empty($value)) {
-                    $userTable[] = [$key, $this->formatValue($value)];
+                if (is_string($value) || is_numeric($value)) {
+                    $userRows[] = [$key, $value];
                 }
             }
 
-            if (!empty($userTable)) {
-                $this->table(['Field', 'Value'], $userTable);
-            } else {
-                $this->warn('No detailed user information available');
+            if (!empty($userRows)) {
+                $this->table(['Field', 'Value'], $userRows);
             }
         }
     }
 
     /**
-     * Display cookie information
+     * Test various API calls.
      */
-    private function displayCookieDetails(EduSTARAuthService $authService): void
+    protected function testApiCalls(): void
     {
-        $this->info('🍪 Session Cookies:');
+        $this->newLine();
+        $this->info('🧪 Testing API calls...');
+        $this->newLine();
 
-        // Use reflection to access private session property
-        $reflection = new \ReflectionClass($authService);
-        $sessionProperty = $reflection->getProperty('session');
-        $sessionProperty->setAccessible(true);
-        $cookies = $sessionProperty->getValue($authService);
-
-        if (empty($cookies)) {
-            $this->warn('No session cookies found');
-            return;
-        }
-
-        $cookieTable = [];
-        foreach ($cookies as $name => $value) {
-            $maskedValue = $this->maskSensitiveValue($value);
-            $cookieTable[] = [
-                $name,
-                $maskedValue,
-                strlen($value) . ' chars',
-                $this->getCookieType($name)
-            ];
-        }
-
-        $this->table(['Name', 'Value (masked)', 'Length', 'Type'], $cookieTable);
-
-        $this->info("Total cookies: " . count($cookies));
-    }
-
-    /**
-     * Test API capabilities
-     */
-    private function testApiCapabilities(EduSTARAuthService $authService): void
-    {
-        $this->info('🧪 Testing API Capabilities:');
-
-        $testEndpoints = [
-            'Profile' => 'https://apps.edustar.vic.edu.au/edustarmc/api/profile',
-            'Dashboard' => 'https://apps.edustar.vic.edu.au/edustarmc/dashboard',
-            'Home' => 'https://apps.edustar.vic.edu.au/edustarmc/',
+        $apiTests = [
+            ['method' => 'GET', 'endpoint' => 'user', 'description' => 'Get user information'],
+            ['method' => 'GET', 'endpoint' => 'schools', 'description' => 'List schools'],
+            ['method' => 'GET', 'endpoint' => 'dashboard', 'description' => 'Get dashboard data'],
         ];
 
         $results = [];
-        foreach ($testEndpoints as $name => $endpoint) {
+
+        foreach ($apiTests as $test) {
+            $this->line("Testing: {$test['description']}...");
+
             try {
-                $response = $authService->makeApiCall($endpoint);
+                $startTime = microtime(true);
+                $response = $this->eduStarService->apiCall(
+                    $test['method'],
+                    $test['endpoint']
+                );
+                $endTime = microtime(true);
+
+                $duration = round(($endTime - $startTime) * 1000, 2);
                 $status = $response->successful() ? '✅ Success' : '❌ Failed';
-                $statusCode = $response->status();
-                $results[] = [$name, $endpoint, $status, $statusCode];
+
+                $results[] = [
+                    $test['description'],
+                    $test['method'] . ' /' . $test['endpoint'],
+                    $response->status(),
+                    $status,
+                    $duration . 'ms'
+                ];
+
+                if ($this->option('verbose') && $response->successful()) {
+                    $data = $response->json();
+                    if ($data) {
+                        $this->line('Response: ' . json_encode($data, JSON_PRETTY_PRINT));
+                    }
+                }
+
             } catch (Exception $e) {
-                $results[] = [$name, $endpoint, '❌ Error', $e->getMessage()];
+                $results[] = [
+                    $test['description'],
+                    $test['method'] . ' /' . $test['endpoint'],
+                    'Error',
+                    '❌ Exception',
+                    $e->getMessage()
+                ];
             }
         }
 
-        $this->table(['Endpoint', 'URL', 'Status', 'Code/Error'], $results);
+        $this->newLine();
+        $this->info('📋 API Test Results:');
+        $this->table(
+            ['Test', 'Endpoint', 'Status Code', 'Result', 'Response Time'],
+            $results
+        );
     }
 
     /**
-     * Display students data in a formatted way
+     * Show usage examples.
      */
-    private function testGetStudentsAPI(EdustarAuthService $authService, string $schoolNumber): void
+    public function showUsageExamples(): void
     {
-        $this->info('👥 Testing GetStudents API:');
-
-        $endpoint = "https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/{$schoolNumber}/FULL";
-        $this->line("Endpoint: {$endpoint}");
+        $this->info('📖 Usage Examples:');
         $this->newLine();
 
-        try {
-            $this->info('Making API request...');
-            $startTime = microtime(true);
-
-            $response = $authService->makeApiCall($endpoint);
-
-            $endTime = microtime(true);
-            $responseTime = round(($endTime - $startTime) * 1000, 2);
-
-            // Display response details
-            $statusCode = $response->status();
-            $contentType = $response->header('Content-Type') ?? 'unknown';
-            $responseSize = strlen($response->body());
-
-            $this->info("📊 Response Details:");
-            $responseDetails = [
-                ['Property', 'Value'],
-                ['Status Code', $this->getStatusCodeWithEmoji($statusCode)],
-                ['Content Type', $contentType],
-                ['Response Time', "{$responseTime}ms"],
-                ['Response Size', $this->formatBytes($responseSize)],
-            ];
-
-            $this->table(['Property', 'Value'], array_slice($responseDetails, 1));
-            $this->newLine();
-
-            if ($response->successful()) {
-                $this->info('✅ GetStudents API Request Successful!');
-                $this->newLine();
-
-                $this->info('📄 Raw Response Body:');
-                $this->line('----------------------------------------');
-                $this->line($response->body());
-                $this->line('----------------------------------------');
-            } else {
-                $this->error('❌ GetStudents API Request Failed!');
-                $this->newLine();
-
-                $this->warn('📄 Raw Error Response Body:');
-                $this->line('----------------------------------------');
-                $this->line($response->body());
-                $this->line('----------------------------------------');
-            }
-
-        } catch (Exception $e) {
-            $this->error('❌ GetStudents API Request Exception!');
-            $this->error("Error: {$e->getMessage()}");
-
-            if ($this->option('debug')) {
-                $this->newLine();
-                $this->warn('Stack trace:');
-                $this->line($e->getTraceAsString());
-            }
-        }
-    }
-
-    /**
-     * Find field value from possible field names
-     */
-    private function findFieldValue(array $data, array $possibleFields): ?string
-    {
-        foreach ($possibleFields as $field) {
-            if (isset($data[$field]) && !empty($data[$field])) {
-                return (string) $data[$field];
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Display JSON data in a formatted table
-     */
-    private function displayJsonData(array $data, string $title = 'Data'): void
-    {
-        $this->info("📋 {$title}:");
-
-        $flattened = [];
-        $this->flattenArray($data, $flattened);
-
-        $table = [];
-        foreach ($flattened as $key => $value) {
-            if (is_scalar($value)) {
-                $table[] = [$key, $this->formatValue($value)];
-            }
-        }
-
-        if (!empty($table)) {
-            $this->table(['Field', 'Value'], $table);
-        } else {
-            $this->warn('No displayable data found');
-        }
-    }
-
-    /**
-     * Display raw response content (truncated)
-     */
-    private function displayRawResponse(string $content, int $maxLength = 1000): void
-    {
-        if (strlen($content) > $maxLength) {
-            $this->line(substr($content, 0, $maxLength) . '...');
-            $this->info("(Truncated - full content is " . strlen($content) . " characters)");
-        } else {
-            $this->line($content);
-        }
-    }
-
-    /**
-     * Get status code with appropriate emoji
-     */
-    private function getStatusCodeWithEmoji(int $statusCode): string
-    {
-        $emoji = match(true) {
-            $statusCode >= 200 && $statusCode < 300 => '✅',
-            $statusCode >= 300 && $statusCode < 400 => '🔄',
-            $statusCode >= 400 && $statusCode < 500 => '❌',
-            $statusCode >= 500 => '💥',
-            default => '❓'
-        };
-
-        return "{$emoji} {$statusCode}";
-    }
-
-    /**
-     * Format bytes to human readable format
-     */
-    private function formatBytes(int $bytes): string
-    {
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $factor = 1024;
-
-        for ($i = 0; $i < count($units) - 1 && $bytes >= $factor; $i++) {
-            $bytes /= $factor;
-        }
-
-        return round($bytes, 2) . ' ' . $units[$i];
-    }
-
-    /**
-     * Flatten nested array for display
-     */
-    private function flattenArray(array $array, array &$result, string $prefix = ''): void
-    {
-        foreach ($array as $key => $value) {
-            $newKey = $prefix ? "{$prefix}.{$key}" : $key;
-
-            if (is_array($value)) {
-                $this->flattenArray($value, $result, $newKey);
-            } else {
-                $result[$newKey] = $value;
-            }
-        }
-    }
-
-    /**
-     * Format value for display
-     */
-    private function formatValue($value): string
-    {
-        if (is_bool($value)) {
-            return $value ? 'true' : 'false';
-        }
-
-        if (is_null($value)) {
-            return 'null';
-        }
-
-        return (string) $value;
-    }
-
-    /**
-     * Mask sensitive values for display
-     */
-    private function maskSensitiveValue(string $value): string
-    {
-        if (strlen($value) <= 8) {
-            return str_repeat('*', strlen($value));
-        }
-
-        return substr($value, 0, 4) . str_repeat('*', max(4, strlen($value) - 8)) . substr($value, -4);
-    }
-
-    /**
-     * Determine cookie type based on name
-     */
-    private function getCookieType(string $name): string
-    {
-        $types = [
-            'JSESSIONID' => 'Session',
-            'PHPSESSID' => 'PHP Session',
-            'ASP.NET_SessionId' => 'ASP.NET Session',
-            'MRHSession' => 'F5 Session',
-            'BIGipServer' => 'F5 Load Balancer',
-            'TS' => 'F5 Timestamp',
-            'LastMRH_Session' => 'F5 Session Backup',
+        $examples = [
+            'Interactive mode' => 'php artisan edustar:test --interactive',
+            'With credentials' => 'php artisan edustar:test --username=john.doe --password=secret',
+            'Full test suite' => 'php artisan edustar:test --interactive --api-test --verbose',
+            'Quick connection test' => 'php artisan edustar:test',
         ];
 
-        foreach ($types as $pattern => $type) {
-            if (stripos($name, $pattern) !== false) {
-                return $type;
-            }
+        foreach ($examples as $description => $command) {
+            $this->line("<comment>{$description}:</comment>");
+            $this->line("  {$command}");
+            $this->newLine();
         }
-
-        if (stripos($name, 'session') !== false) {
-            return 'Session';
-        }
-
-        if (stripos($name, 'auth') !== false) {
-            return 'Authentication';
-        }
-
-        return 'Unknown';
     }
 }
