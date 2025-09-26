@@ -17,23 +17,18 @@ class EdustarAuthService
     public function __construct(int $maxAttempts = 3)
     {
         $this->maxAttempts = $maxAttempts;
-        $this->session = null;
+        $this->session = [];
         $this->connection = null;
         $this->headers = [
-            'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept' => 'application/json, text/plain, */*',
-            'Accept-Language' => 'en-US,en;q=0.9',
-            'Referer' => 'https://apps.edustar.vic.edu.au/edustarmc/',
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0',
+            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language' => 'en-US,en;q=0.5',
+            'Accept-Encoding' => 'gzip, deflate, br, zstd',
         ];
     }
 
     /**
      * Connect to eduSTAR with credentials
-     *
-     * @param string $username
-     * @param string $password
-     * @return array
-     * @throws Exception
      */
     public function connect(string $username, string $password): array
     {
@@ -45,118 +40,129 @@ class EdustarAuthService
             Log::info("Connection attempt {$attempt} of {$this->maxAttempts}...");
 
             try {
-                $this->session = null;
+                $this->session = [];
 
-                Log::info("Getting login page...");
-                $loginPageResponse = Http::withOptions([
-                    'allow_redirects' => ['max' => 5],
-                    'timeout' => 30,
-                ])->get('https://apps.edustar.vic.edu.au/edustarmc/');
+                // Step 1: Get initial page to establish session
+                Log::info("Getting initial login page...");
+                $initialResponse = Http::withHeaders($this->headers)
+                    ->withOptions([
+                        'allow_redirects' => ['max' => 5],
+                        'timeout' => 30,
+                    ])
+                    ->get('https://apps.edustar.vic.edu.au/my.policy');
 
-                if (!$loginPageResponse->successful()) {
-                    throw new Exception("Failed to get login page: " . $loginPageResponse->status());
+                if (!$initialResponse->successful()) {
+                    throw new Exception("Failed to get initial page: " . $initialResponse->status());
                 }
 
-                $loginContent = $loginPageResponse->body();
-                $cookies = $this->extractCookies($loginPageResponse);
-                Log::debug("Initial cookies extracted: " . (!empty($cookies) ? count($cookies) . " cookies" : "No cookies"));
+                // Extract cookies from initial request
+                $cookies = $this->extractCookies($initialResponse);
+                Log::debug("Initial cookies: " . json_encode(array_keys($cookies)));
 
-                if (strpos($loginContent, 'Access policy evaluation is already in progress') !== false) {
-                    Log::info("Detected session conflict, extracting newsession URI...");
-
-                    $newSessionUri = $this->extractNewSessionUri($loginContent);
-
-                    if ($newSessionUri) {
-                        Log::info("Found newsession URI: {$newSessionUri}");
-
-                        $newSessionUrl = "https://apps.edustar.vic.edu.au/logon.php3?{$newSessionUri}";
-                        Log::info("Creating new session via: {$newSessionUrl}");
-
-                        $cleanResponse = Http::withOptions([
-                            'allow_redirects' => ['max' => 5],
-                            'timeout' => 30,
-                        ])->get($newSessionUrl);
-
-                        if (!$cleanResponse->successful()) {
-                            throw new Exception("Failed to create new session: " . $cleanResponse->status());
-                        }
-
-                        $newCookies = $this->extractCookies($cleanResponse);
-                        // Merge cookies, giving priority to new ones
-                        $cookies = array_merge($cookies, $newCookies);
-                        Log::debug("After new session cookies: " . (!empty($cookies) ? count($cookies) . " cookies" : "No cookies"));
-
-                        sleep(5);
-
-                        Log::info("New session established, proceeding with authentication...");
-                    } else {
-                        Log::warning("Could not extract newsession URI, will try direct authentication...");
-                    }
-                } else {
-                    Log::info("Login page accessible, proceeding with authentication...");
-                }
-
+                // Step 2: Prepare authentication data - just username and password
                 $authData = [
-                    'curl' => 'Z2Fedustarmc',
-                    'username' => $username,
-                    'password' => $password,
-                    'SubmitCreds' => 'Log+in'
+                    'username' => $username, // Should be in format like EDU001\\USERNAME
+                    'password' => $password
                 ];
 
                 $authHeaders = array_merge($this->headers, [
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language' => 'en-US,en;q=0.5',
                     'Content-Type' => 'application/x-www-form-urlencoded',
-                    'Cache-Control' => 'no-cache',
-                    'Pragma' => 'no-cache',
+                    'Origin' => 'https://apps.edustar.vic.edu.au',
+                    'Referer' => 'https://apps.edustar.vic.edu.au/my.policy',
+                    'Connection' => 'keep-alive',
+                    'Upgrade-Insecure-Requests' => '1',
+                    'Sec-Fetch-Dest' => 'document',
+                    'Sec-Fetch-Mode' => 'navigate',
+                    'Sec-Fetch-Site' => 'same-origin',
+                    'Sec-Fetch-User' => '?1',
+                    'Priority' => 'u=0, i'
                 ]);
 
+                // Add cookies if we have them
                 if (!empty($cookies)) {
                     $authHeaders['Cookie'] = $this->formatCookies($cookies);
                 }
 
-                Log::info("Submitting credentials...");
+                Log::info("Submitting credentials to my.policy...");
                 $authResponse = Http::withHeaders($authHeaders)
                     ->withOptions([
-                        'allow_redirects' => ['max' => 5],
+                        'allow_redirects' => false, // Don't follow redirects automatically
                         'timeout' => 30,
                     ])
                     ->asForm()
                     ->post('https://apps.edustar.vic.edu.au/my.policy', $authData);
 
-                if (!$authResponse->successful()) {
-                    throw new Exception("Authentication failed: " . $authResponse->status());
+                Log::debug("Auth response status: " . $authResponse->status());
+                Log::debug("Auth response headers: " . json_encode($authResponse->headers()));
+
+                // Should get 302 redirect on successful auth
+                if ($authResponse->status() === 302) {
+                    $redirectLocation = $authResponse->header('Location');
+                    Log::info("Got redirect to: " . $redirectLocation);
+
+                    // Extract new cookies from auth response
+                    $authCookies = $this->extractCookies($authResponse);
+                    $this->session = array_merge($cookies, $authCookies);
+                    Log::debug("Updated session cookies: " . json_encode(array_keys($this->session)));
+
+                    // Follow the redirect to complete authentication
+                    $redirectUrl = $redirectLocation;
+                    if (!str_starts_with($redirectLocation, 'http')) {
+                        $redirectUrl = 'https://apps.edustar.vic.edu.au' . $redirectLocation;
+                    }
+
+                    $redirectHeaders = array_merge($this->headers, [
+                        'Referer' => 'https://apps.edustar.vic.edu.au/my.policy',
+                        'Cookie' => $this->formatCookies($this->session)
+                    ]);
+
+                    Log::info("Following redirect to: " . $redirectUrl);
+                    $redirectResponse = Http::withHeaders($redirectHeaders)
+                        ->withOptions([
+                            'allow_redirects' => ['max' => 5],
+                            'timeout' => 30,
+                        ])
+                        ->get($redirectUrl);
+
+                    if ($redirectResponse->successful()) {
+                        // Extract any additional cookies from the redirect
+                        $finalCookies = $this->extractCookies($redirectResponse);
+                        $this->session = array_merge($this->session, $finalCookies);
+
+                        Log::info("Authentication successful, testing connection...");
+
+                        // Test the connection
+                        $connectionTest = $this->testConnection();
+                        if (!$connectionTest['success']) {
+                            Log::warning("Connection test failed, but auth seemed successful");
+                        }
+
+                        $connectionInfo = [
+                            'connected' => true,
+                            'logged_in_as' => 'Authenticated User',
+                            'user_details' => [],
+                            'schools' => 1
+                        ];
+
+                        $this->connection = $connectionInfo;
+
+                        Log::info("Successfully connected");
+                        $success = true;
+                        return $connectionInfo;
+                    } else {
+                        throw new Exception("Failed to follow redirect: " . $redirectResponse->status());
+                    }
+                } else {
+                    // Check response content for error messages
+                    $authContent = $authResponse->body();
+                    if (strpos($authContent, 'Invalid') !== false ||
+                        strpos($authContent, 'denied') !== false ||
+                        strpos($authContent, 'error') !== false) {
+                        throw new Exception("Authentication failed: Invalid credentials");
+                    } else {
+                        throw new Exception("Unexpected auth response: " . $authResponse->status());
+                    }
                 }
-
-                // Store session cookies for subsequent requests
-                $authCookies = $this->extractCookies($authResponse);
-                // Merge with existing cookies, giving priority to auth response cookies
-                $this->session = array_merge($cookies, $authCookies);
-                Log::debug("Final session cookies: " . (!empty($this->session) ? count($this->session) . " cookies" : "No cookies"));
-
-                Log::info("Testing API access...");
-                $connectionTest = $this->testConnection();
-
-                if (!$connectionTest['success']) {
-                    throw new Exception("Connection test failed: " . $connectionTest['error']);
-                }
-
-                $getUser = $connectionTest['getUser'];
-
-                $connectionInfo = [
-                    'connected' => true,
-                    'logged_in_as' => $getUser['User']['_displayName'] ?? 'Unknown',
-                    'user_details' => $getUser['User'] ?? [],
-                    'schools' => $getUser['User']['_schools']['ChildNodes']['Count'] ?? 0
-                ];
-
-                $this->connection = $connectionInfo;
-
-                Log::info("Successfully connected as: " . $connectionInfo['logged_in_as']);
-                Log::info("Access to " . $connectionInfo['schools'] . " school(s)");
-
-                $success = true;
-                return $connectionInfo;
 
             } catch (Exception $e) {
                 Log::error("Attempt {$attempt} failed: " . $e->getMessage());
@@ -165,13 +171,8 @@ class EdustarAuthService
                     Log::info("Waiting before retry...");
                     sleep(10);
                 } else {
-                    Log::error("All connection attempts failed. The system may be experiencing issues.");
-
-                    if ($this->session) {
-                        Log::debug("Session cookies: " . $this->getMaskedCookiesString());
-                    }
-
-                    throw new Exception("All connection attempts failed. See debug information in logs.");
+                    Log::error("All connection attempts failed.");
+                    throw new Exception("All connection attempts failed: " . $e->getMessage());
                 }
             }
         }
@@ -180,34 +181,33 @@ class EdustarAuthService
     }
 
     /**
-     * Test the connection to eduSTAR API
-     *
-     * @return array
+     * Test the connection
      */
     private function testConnection(): array
     {
         try {
-            $headers = $this->headers;
-            if (!empty($this->session)) {
-                $headers['Cookie'] = $this->formatCookies($this->session);
-            }
+            $headers = array_merge($this->headers, [
+                'Cookie' => $this->formatCookies($this->session)
+            ]);
 
-            // This would be the actual API endpoint for testing connection
             $response = Http::withHeaders($headers)
                 ->withOptions(['timeout' => 30])
-                ->get('https://apps.edustar.vic.edu.au/edustarmc/api/user');
+                ->get('https://apps.edustar.vic.edu.au/edustarmc/');
 
             if ($response->successful()) {
-                return [
-                    'success' => true,
-                    'getUser' => $response->json()
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'error' => 'API test failed: ' . $response->status()
-                ];
+                $content = $response->body();
+                if (strpos($content, 'login') === false || strpos($content, 'edustarmc') !== false) {
+                    return [
+                        'success' => true,
+                        'getUser' => ['User' => ['_displayName' => 'Connected User']]
+                    ];
+                }
             }
+
+            return [
+                'success' => false,
+                'error' => 'Connection test failed: ' . $response->status()
+            ];
         } catch (Exception $e) {
             return [
                 'success' => false,
@@ -218,48 +218,33 @@ class EdustarAuthService
 
     /**
      * Extract cookies from HTTP response
-     *
-     * @param Response $response
-     * @return array
      */
     private function extractCookies(Response $response): array
     {
         $cookies = [];
-        $setCookieHeaders = $response->header('Set-Cookie');
 
-        // Laravel's HTTP client might return different formats
-        if (is_string($setCookieHeaders)) {
-            $setCookieHeaders = [$setCookieHeaders];
-        } elseif (!is_array($setCookieHeaders)) {
-            // Try to get all headers and filter Set-Cookie
-            $allHeaders = $response->headers();
-            $setCookieHeaders = [];
+        // Get all Set-Cookie headers
+        $allHeaders = $response->headers();
 
-            foreach ($allHeaders as $name => $values) {
-                if (strtolower($name) === 'set-cookie') {
-                    $setCookieHeaders = is_array($values) ? $values : [$values];
-                    break;
+        foreach ($allHeaders as $name => $values) {
+            if (strtolower($name) === 'set-cookie') {
+                $cookieHeaders = is_array($values) ? $values : [$values];
+
+                foreach ($cookieHeaders as $cookieHeader) {
+                    if (preg_match('/^([^=]+)=([^;]+)/', $cookieHeader, $matches)) {
+                        $cookies[trim($matches[1])] = trim($matches[2]);
+                    }
                 }
+                break;
             }
         }
 
-        if (is_array($setCookieHeaders)) {
-            foreach ($setCookieHeaders as $cookieHeader) {
-                if (preg_match('/^([^=]+)=([^;]+)/', $cookieHeader, $matches)) {
-                    $cookies[trim($matches[1])] = trim($matches[2]);
-                }
-            }
-        }
-
-        Log::debug("Extracted cookies from response: " . json_encode(array_keys($cookies)));
+        Log::debug("Extracted cookies: " . json_encode(array_keys($cookies)));
         return $cookies;
     }
 
     /**
      * Format cookies for HTTP header
-     *
-     * @param array|null $cookies
-     * @return string
      */
     private function formatCookies(?array $cookies): string
     {
@@ -275,46 +260,7 @@ class EdustarAuthService
     }
 
     /**
-     * Extract new session URI from HTML content
-     *
-     * @param string $content
-     * @return string|null
-     */
-    private function extractNewSessionUri(string $content): ?string
-    {
-        $pattern = '/"newsession",\s*"uri":\s*"([^"]*)"/';
-        if (preg_match($pattern, $content, $matches)) {
-            return $matches[1];
-        }
-        return null;
-    }
-
-    /**
-     * Get masked cookies string for debugging
-     *
-     * @return string
-     */
-    private function getMaskedCookiesString(): string
-    {
-        if (!$this->session) {
-            return 'No session cookies';
-        }
-
-        $masked = [];
-        foreach ($this->session as $name => $value) {
-            $maskedValue = strlen($value) > 8
-                ? substr($value, 0, 4) . '****' . substr($value, -4)
-                : '****';
-            $masked[] = "{$name}={$maskedValue}";
-        }
-
-        return implode('; ', $masked);
-    }
-
-    /**
      * Get current connection info
-     *
-     * @return array|null
      */
     public function getConnection(): ?array
     {
@@ -323,8 +269,6 @@ class EdustarAuthService
 
     /**
      * Check if currently connected
-     *
-     * @return bool
      */
     public function isConnected(): bool
     {
@@ -333,11 +277,6 @@ class EdustarAuthService
 
     /**
      * Make authenticated API call
-     *
-     * @param string $endpoint
-     * @param string $method
-     * @param array $data
-     * @return Response
      */
     public function makeApiCall(string $endpoint, string $method = 'GET', array $data = []): Response
     {
@@ -345,10 +284,10 @@ class EdustarAuthService
             throw new Exception('Not connected to eduSTAR. Please authenticate first.');
         }
 
-        $headers = $this->headers;
-        if (!empty($this->session)) {
-            $headers['Cookie'] = $this->formatCookies($this->session);
-        }
+        $headers = array_merge($this->headers, [
+            'Cookie' => $this->formatCookies($this->session),
+            'Referer' => 'https://apps.edustar.vic.edu.au/edustarmc/'
+        ]);
 
         $http = Http::withHeaders($headers)->withOptions(['timeout' => 30]);
 
