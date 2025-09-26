@@ -55,7 +55,9 @@ class EduStarMCService
 
             try {
                 // Create new HTTP client with cookie jar
-                $this->httpClient = Http::withCookies()
+                $this->httpClient = Http::withOptions([
+                    'cookies' => true, // Enable cookie jar
+                ])
                     ->withHeaders([
                         'User-Agent' => $this->defaultHeaders['User-Agent'],
                         'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -134,7 +136,9 @@ class EduStarMCService
                 Log::info("Creating new session via: {$newSessionUrl}");
 
                 // Create new HTTP client for clean session
-                $this->httpClient = Http::withCookies()
+                $this->httpClient = Http::withOptions([
+                    'cookies' => true, // Enable cookie jar
+                ])
                     ->withHeaders($this->defaultHeaders)
                     ->timeout(30);
 
