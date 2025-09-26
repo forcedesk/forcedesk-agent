@@ -19,7 +19,7 @@ class TestEduSTARConnection extends Command
                             {--password= : Password for authentication}
                             {--interactive : Prompt for credentials interactively}
                             {--api-test : Test API calls after connection}
-                            {--verbose : Show detailed output}';
+                            {--debug : Show detailed output}';
 
     /**
      * The console command description.
@@ -80,7 +80,7 @@ class TestEduSTARConnection extends Command
             $this->newLine();
             $this->error("❌ Test failed: {$e->getMessage()}");
 
-            if ($this->option('verbose')) {
+            if ($this->option('debug')) {
                 $this->error("Stack trace: {$e->getTraceAsString()}");
             }
 
@@ -159,8 +159,8 @@ class TestEduSTARConnection extends Command
         $progressBar->start();
 
         try {
-            // Capture log messages if verbose mode is on
-            if ($this->option('verbose')) {
+            // Capture log messages if debug mode is on
+            if ($this->option('debug')) {
                 Log::listen(function ($level, $message, $context) {
                     if (str_contains($message, 'eduSTAR') || str_contains($message, 'Connection')) {
                         $this->line("\n[{$level}] {$message}");
@@ -206,7 +206,7 @@ class TestEduSTARConnection extends Command
 
         $this->table($headers, $rows);
 
-        if ($this->option('verbose') && !empty($connection['user_details'])) {
+        if ($this->option('debug') && !empty($connection['user_details'])) {
             $this->newLine();
             $this->info('👤 User Details:');
             $userDetails = $connection['user_details'];
@@ -263,7 +263,7 @@ class TestEduSTARConnection extends Command
                     $duration . 'ms'
                 ];
 
-                if ($this->option('verbose') && $response->successful()) {
+                if ($this->option('debug') && $response->successful()) {
                     $data = $response->json();
                     if ($data) {
                         $this->line('Response: ' . json_encode($data, JSON_PRETTY_PRINT));
@@ -300,7 +300,7 @@ class TestEduSTARConnection extends Command
         $examples = [
             'Interactive mode' => 'php artisan edustar:test --interactive',
             'With credentials' => 'php artisan edustar:test --username=john.doe --password=secret',
-            'Full test suite' => 'php artisan edustar:test --interactive --api-test --verbose',
+            'Full test suite' => 'php artisan edustar:test --interactive --api-test --debug',
             'Quick connection test' => 'php artisan edustar:test',
         ];
 
