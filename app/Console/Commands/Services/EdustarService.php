@@ -71,7 +71,7 @@ class EdustarService extends Command
     {
         try {
             // Get the login page
-            $loginUrl = 'https://apps.edustar.vic.edu.au/edustarmc/login'; // Adjust this URL as needed
+            $loginUrl = 'https://apps.edustar.vic.edu.au/my.policy'; // Adjust this URL as needed
 
             $this->info('Fetching login page...');
             $loginPageResponse = $this->client->get($loginUrl);
