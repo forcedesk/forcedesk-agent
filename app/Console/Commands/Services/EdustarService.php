@@ -213,6 +213,7 @@ class EdustarService extends Command
                 'headers' => [
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
+                    'Referer' => 'https://apps.edustar.vic.edu.au/my.policy',
                 ]
             ]);
 
