@@ -217,7 +217,7 @@ class EdustarService extends Command
                 ]
             ]);
 
-            dd(json_decode($response->getBody()->getContents()));
+            dd($response->getBody());
 
             $students = json_decode($response->getBody());
 
