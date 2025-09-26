@@ -59,6 +59,7 @@ class EdustarAuthService
 
                 $loginContent = $loginPageResponse->body();
                 $cookies = $this->extractCookies($loginPageResponse);
+                Log::debug("Initial cookies extracted: " . (!empty($cookies) ? count($cookies) . " cookies" : "No cookies"));
 
                 if (strpos($loginContent, 'Access policy evaluation is already in progress') !== false) {
                     Log::info("Detected session conflict, extracting newsession URI...");
@@ -80,7 +81,10 @@ class EdustarAuthService
                             throw new Exception("Failed to create new session: " . $cleanResponse->status());
                         }
 
-                        $cookies = $this->extractCookies($cleanResponse);
+                        $newCookies = $this->extractCookies($cleanResponse);
+                        // Merge cookies, giving priority to new ones
+                        $cookies = array_merge($cookies, $newCookies);
+                        Log::debug("After new session cookies: " . (!empty($cookies) ? count($cookies) . " cookies" : "No cookies"));
 
                         sleep(5);
 
@@ -181,7 +185,7 @@ class EdustarAuthService
     {
         try {
             $headers = $this->headers;
-            if ($this->session) {
+            if (!empty($this->session)) {
                 $headers['Cookie'] = $this->formatCookies($this->session);
             }
 
@@ -238,11 +242,15 @@ class EdustarAuthService
     /**
      * Format cookies for HTTP header
      *
-     * @param array $cookies
+     * @param array|null $cookies
      * @return string
      */
-    private function formatCookies(array $cookies): string
+    private function formatCookies(?array $cookies): string
     {
+        if (empty($cookies)) {
+            return '';
+        }
+
         $cookiePairs = [];
         foreach ($cookies as $name => $value) {
             $cookiePairs[] = "{$name}={$value}";
@@ -322,7 +330,7 @@ class EdustarAuthService
         }
 
         $headers = $this->headers;
-        if ($this->session) {
+        if (!empty($this->session)) {
             $headers['Cookie'] = $this->formatCookies($this->session);
         }
 
