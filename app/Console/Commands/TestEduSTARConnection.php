@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\EduSTARAuthService;
+use App\Services\EdustarAuthService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Exception;
