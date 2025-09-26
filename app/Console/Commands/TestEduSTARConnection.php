@@ -159,15 +159,6 @@ class TestEduSTARConnection extends Command
         $progressBar->start();
 
         try {
-            // Capture log messages if debug mode is on
-            if ($this->option('debug')) {
-                Log::listen(function ($level, $message, $context) {
-                    if (str_contains($message, 'eduSTAR') || str_contains($message, 'Connection')) {
-                        $this->line("\n[{$level}] {$message}");
-                    }
-                });
-            }
-
             $connection = $this->eduStarService->connect($username, $password);
             $progressBar->finish();
 
