@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
-class TestEduSTARConnectionHybrid extends Command
+class TestEduSTARConnection extends Command
 {
     protected $signature = 'edustar:test-hybrid
                             {username? : The username to authenticate with}
