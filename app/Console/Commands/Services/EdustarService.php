@@ -4,7 +4,6 @@ namespace App\Console\Commands\Services;
 
 use App\Helper\AgentConnectivityHelper;
 use App\Models\EdupassAccounts;
-use App\Services\EdustarAuthService;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
@@ -52,8 +51,6 @@ class EdustarService extends Command
     public function handle()
     {
 
-        $authService = new EdustarAuthService(maxAttempts: 3);
-
         $test = AgentConnectivityHelper::testConnectivity();
 
         if(!$test)
@@ -76,11 +73,13 @@ class EdustarService extends Command
         $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/'.config('agentconfig.emc.emc_school_code').'/FULL';
 
         try {
-
-            $authService->connect(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'));
-            $response = $authService->makeApiCall($url);
-
-            dd(json_decode($response->getBody()));
+            $client = new Client();
+            $response = $client->get($url, [
+                'auth' => [
+                    config('agentconfig.emc.emc_username'),
+                    config('agentconfig.emc.emc_password'),
+                ],
+            ]);
 
             foreach (json_decode($response->getbody()) as $item) {
 
