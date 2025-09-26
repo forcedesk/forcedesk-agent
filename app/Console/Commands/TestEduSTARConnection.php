@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\EdustarAuthService;
+use App\Services\EduSTARAuthService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -17,16 +17,18 @@ class TestEduSTARConnection extends Command
     protected $signature = 'edustar:test-connection
                             {username? : The username to authenticate with}
                             {password? : The password to authenticate with}
+                            {school-number? : The school number for API testing}
                             {--attempts=3 : Maximum number of connection attempts}
                             {--debug : Enable debug output}
-                            {--no-cookies : Don\'t display cookie values}';
+                            {--no-cookies : Don\'t display cookie values}
+                            {--skip-students : Skip the GetStudents API test}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Test connection to EduSTAR and dump connection details';
+    protected $description = 'Test connection to EduSTAR, dump connection details, and test GetStudents API';
 
     /**
      * Execute the console command.
@@ -39,15 +41,28 @@ class TestEduSTARConnection extends Command
         // Get credentials
         $username = $this->argument('username') ?? $this->ask('Username');
         $password = $this->argument('password') ?? $this->secret('Password');
+        $schoolNumber = $this->argument('school-number') ?? $this->ask('School Number');
 
         if (empty($username) || empty($password)) {
             $this->error('Username and password are required!');
             return Command::FAILURE;
         }
 
+        if (empty($schoolNumber)) {
+            $this->error('School number is required!');
+            return Command::FAILURE;
+        }
+
+        // Validate school number format
+        if (!preg_match('/^\d{4}$/', $schoolNumber)) {
+            $this->error('School number must be a 4-digit number!');
+            return Command::FAILURE;
+        }
+
         $maxAttempts = (int) $this->option('attempts');
         $debug = $this->option('debug');
         $showCookies = !$this->option('no-cookies');
+        $skipStudents = $this->option('skip-students');
 
         // Configure logging for debug mode
         if ($debug) {
@@ -92,6 +107,12 @@ class TestEduSTARConnection extends Command
 
             // Test API capabilities
             $this->testApiCapabilities($authService);
+            $this->newLine();
+
+            // Test GetStudents API if not skipped
+            if (!$skipStudents) {
+                $this->testGetStudentsAPI($authService, $schoolNumber);
+            }
 
             return Command::SUCCESS;
 
@@ -213,6 +234,252 @@ class TestEduSTARConnection extends Command
         }
 
         $this->table(['Endpoint', 'URL', 'Status', 'Code/Error'], $results);
+    }
+
+    /**
+     * Test GetStudents API endpoint
+     */
+    private function testGetStudentsAPI(EduSTARAuthService $authService, string $schoolNumber): void
+    {
+        $this->info('👥 Testing GetStudents API:');
+
+        $endpoint = "https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/{$schoolNumber}/FULL";
+        $this->line("Endpoint: {$endpoint}");
+        $this->newLine();
+
+        try {
+            $this->info('Making API request...');
+            $startTime = microtime(true);
+
+            $response = $authService->makeApiCall($endpoint);
+
+            $endTime = microtime(true);
+            $responseTime = round(($endTime - $startTime) * 1000, 2);
+
+            // Display response details
+            $statusCode = $response->status();
+            $contentType = $response->header('Content-Type') ?? 'unknown';
+            $responseSize = strlen($response->body());
+
+            $this->info("📊 Response Details:");
+            $responseDetails = [
+                ['Property', 'Value'],
+                ['Status Code', $this->getStatusCodeWithEmoji($statusCode)],
+                ['Content Type', $contentType],
+                ['Response Time', "{$responseTime}ms"],
+                ['Response Size', $this->formatBytes($responseSize)],
+            ];
+
+            $this->table(['Property', 'Value'], array_slice($responseDetails, 1));
+
+            if ($response->successful()) {
+                $this->newLine();
+                $this->info('✅ GetStudents API Request Successful!');
+
+                // Try to parse JSON response
+                try {
+                    $data = $response->json();
+                    $this->displayStudentsData($data, $schoolNumber);
+                } catch (Exception $e) {
+                    $this->warn('Response is not valid JSON, displaying raw content preview:');
+                    $this->displayRawResponse($response->body());
+                }
+            } else {
+                $this->error('❌ GetStudents API Request Failed!');
+                $this->newLine();
+
+                // Show error details
+                $this->warn('Error Response:');
+                $errorContent = $response->body();
+
+                if (!empty($errorContent)) {
+                    try {
+                        $errorData = $response->json();
+                        $this->displayJsonData($errorData, 'Error Details');
+                    } catch (Exception $e) {
+                        $this->displayRawResponse($errorContent);
+                    }
+                } else {
+                    $this->line('No error content returned');
+                }
+            }
+
+        } catch (Exception $e) {
+            $this->error('❌ GetStudents API Request Exception!');
+            $this->error("Error: {$e->getMessage()}");
+
+            if ($this->option('debug')) {
+                $this->newLine();
+                $this->warn('Stack trace:');
+                $this->line($e->getTraceAsString());
+            }
+        }
+    }
+
+    /**
+     * Display students data in a formatted way
+     */
+    private function displayStudentsData(array $data, string $schoolNumber): void
+    {
+        $this->newLine();
+        $this->info("📚 Students Data for School {$schoolNumber}:");
+
+        if (empty($data)) {
+            $this->warn('No student data returned');
+            return;
+        }
+
+        // Check if it's an array of students or wrapped data
+        $students = $data;
+        if (isset($data['students'])) {
+            $students = $data['students'];
+        } elseif (isset($data['data'])) {
+            $students = $data['data'];
+        } elseif (isset($data[0]) && is_array($data[0])) {
+            $students = $data;
+        }
+
+        if (is_array($students) && !empty($students)) {
+            $this->info("📈 Summary:");
+            $summaryTable = [
+                ['Total Students', count($students)],
+            ];
+
+            // Analyze student data structure
+            if (!empty($students[0])) {
+                $firstStudent = $students[0];
+                $summaryTable[] = ['Fields per Student', count($firstStudent)];
+
+                // Show available fields
+                $this->newLine();
+                $this->info("🏷️  Available Student Fields:");
+                $fields = array_keys($firstStudent);
+                $fieldChunks = array_chunk($fields, 4);
+                foreach ($fieldChunks as $chunk) {
+                    $this->line('  • ' . implode(', ', $chunk));
+                }
+            }
+
+            $this->newLine();
+            $this->table(['Property', 'Value'], $summaryTable);
+
+            // Display sample students (first 5)
+            $this->newLine();
+            $this->info("👥 Sample Students (first 5):");
+
+            $sampleStudents = array_slice($students, 0, 5);
+            $studentTable = [];
+
+            foreach ($sampleStudents as $index => $student) {
+                $displayFields = [];
+
+                // Try common field names
+                $possibleNameFields = ['name', 'fullName', 'firstName', 'student_name', 'Name', 'FullName'];
+                $possibleIdFields = ['id', 'studentId', 'student_id', 'ID', 'StudentID'];
+                $possibleYearFields = ['year', 'yearLevel', 'grade', 'Year', 'YearLevel'];
+
+                $name = $this->findFieldValue($student, $possibleNameFields) ?? 'Unknown';
+                $id = $this->findFieldValue($student, $possibleIdFields) ?? 'N/A';
+                $year = $this->findFieldValue($student, $possibleYearFields) ?? 'N/A';
+
+                $studentTable[] = [
+                    $index + 1,
+                    $name,
+                    $id,
+                    $year
+                ];
+            }
+
+            $this->table(['#', 'Name', 'ID', 'Year'], $studentTable);
+
+            if (count($students) > 5) {
+                $this->info("... and " . (count($students) - 5) . " more students");
+            }
+
+        } else {
+            $this->displayJsonData($data, 'Raw Response Data');
+        }
+    }
+
+    /**
+     * Find field value from possible field names
+     */
+    private function findFieldValue(array $data, array $possibleFields): ?string
+    {
+        foreach ($possibleFields as $field) {
+            if (isset($data[$field]) && !empty($data[$field])) {
+                return (string) $data[$field];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Display JSON data in a formatted table
+     */
+    private function displayJsonData(array $data, string $title = 'Data'): void
+    {
+        $this->info("📋 {$title}:");
+
+        $flattened = [];
+        $this->flattenArray($data, $flattened);
+
+        $table = [];
+        foreach ($flattened as $key => $value) {
+            if (is_scalar($value)) {
+                $table[] = [$key, $this->formatValue($value)];
+            }
+        }
+
+        if (!empty($table)) {
+            $this->table(['Field', 'Value'], $table);
+        } else {
+            $this->warn('No displayable data found');
+        }
+    }
+
+    /**
+     * Display raw response content (truncated)
+     */
+    private function displayRawResponse(string $content, int $maxLength = 1000): void
+    {
+        if (strlen($content) > $maxLength) {
+            $this->line(substr($content, 0, $maxLength) . '...');
+            $this->info("(Truncated - full content is " . strlen($content) . " characters)");
+        } else {
+            $this->line($content);
+        }
+    }
+
+    /**
+     * Get status code with appropriate emoji
+     */
+    private function getStatusCodeWithEmoji(int $statusCode): string
+    {
+        $emoji = match(true) {
+            $statusCode >= 200 && $statusCode < 300 => '✅',
+            $statusCode >= 300 && $statusCode < 400 => '🔄',
+            $statusCode >= 400 && $statusCode < 500 => '❌',
+            $statusCode >= 500 => '💥',
+            default => '❓'
+        };
+
+        return "{$emoji} {$statusCode}";
+    }
+
+    /**
+     * Format bytes to human readable format
+     */
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $factor = 1024;
+
+        for ($i = 0; $i < count($units) - 1 && $bytes >= $factor; $i++) {
+            $bytes /= $factor;
+        }
+
+        return round($bytes, 2) . ' ' . $units[$i];
     }
 
     /**
