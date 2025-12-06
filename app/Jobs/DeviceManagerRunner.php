@@ -35,8 +35,6 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
 
         $device = $this->device;
 
-        \Log::info(json_decode($device));
-
         if ($device->device_username && $device->device_password) {
             $process = $this->runBackupCommand($device);
 
@@ -106,73 +104,39 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
             )
         ]);
 
-        if ($latestBackup !== $backupDataHash) {
-            $payload = [
-                'device_id' => $device->id,
-                'data' => $configData,
-                'uuid' => Str::uuid(),
-                'batch' => $this->batchid,
-                'size' => strlen($configData),
-                'status' => 'success',
-                'log' => "Backup for Device: {$device->name} was successful."
-            ];
+        $payload = [
+            'device_id' => $device->id,
+            'data' => $configData,
+            'uuid' => Str::uuid(),
+            'batch' => $this->batchid,
+            'size' => strlen($configData),
+            'status' => 'success',
+            'log' => "Backup for Device: {$device->name} was successful."
+        ];
 
-            try {
-                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/response', [
-                    'headers' => [],
-                    'body' => json_encode($payload),
+        try {
+            $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/response', [
+                'headers' => [],
+                'body' => json_encode($payload),
+            ]);
+
+            if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 201) {
+                \Illuminate\Support\Facades\Log::error('Failed to send device manager backup - non-success status', [
+                    'status_code' => $response->getStatusCode(),
+                    'response_body' => $response->getBody()->getContents()
                 ]);
-
-                if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 201) {
-                    \Illuminate\Support\Facades\Log::error('Failed to send device manager backup - non-success status', [
-                        'status_code' => $response->getStatusCode(),
-                        'response_body' => $response->getBody()->getContents()
-                    ]);
-                    throw new \Exception('Non-success status code: ' . $response->getStatusCode());
-                }
-
-                Log::info('Device manager backup sent successfully', [
-                    'http_status' => $response->getStatusCode()
-                ]);
-
-            } catch (GuzzleException $e) {
-                Log::error('Failed to send device manager backup - HTTP error', [
-                    'error' => $e->getMessage()
-                ]);
-                throw $e;
+                throw new \Exception('Non-success status code: ' . $response->getStatusCode());
             }
 
-        } else {
-            $payload = [
-                'device_id' => $device->id,
-                'status' => 'failed',
-                'log' => "Backup for Device: {$device->name} failed."
-            ];
+            Log::info('Device manager backup sent successfully', [
+                'http_status' => $response->getStatusCode()
+            ]);
 
-            try {
-                $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/response', [
-                    'headers' => [],
-                    'body' => json_encode($payload),
-                ]);
-
-                if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 201) {
-                    \Illuminate\Support\Facades\Log::error('Failed to send device manager backup - non-success status', [
-                        'status_code' => $response->getStatusCode(),
-                        'response_body' => $response->getBody()->getContents()
-                    ]);
-                    throw new \Exception('Non-success status code: ' . $response->getStatusCode());
-                }
-
-                Log::info('Device manager backup sent successfully', [
-                    'http_status' => $response->getStatusCode()
-                ]);
-
-            } catch (GuzzleException $e) {
-                Log::error('Failed to send device manager backup - HTTP error', [
-                    'error' => $e->getMessage()
-                ]);
-                throw $e;
-            }
+        } catch (GuzzleException $e) {
+            Log::error('Failed to send device manager backup - HTTP error', [
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
         }
     }
 
