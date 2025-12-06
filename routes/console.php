@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Schedule;
 /* Process Monitoring Payloads */
 Schedule::command('agent:monitoring-service')->everyMinute()->withoutOverlapping()->runInBackground();
 
+/* Process Device Manager Backup Payloads */
+Schedule::command('agent:devicemanager-service')->everyMinute()->withoutOverlapping()->runInBackground();
+
 /* Check for Kiosk Password Reset Requests */
 Schedule::command('agent:kiosk-service')->everyFiveSeconds()->withoutOverlapping()->runInBackground();
 
