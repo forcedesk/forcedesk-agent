@@ -88,10 +88,6 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
 
     protected function sendBackup($device, $configData): void
     {
-        $latestBackup = $device->latesthash;
-
-        $backupDataHash = hash('sha256', $configData);
-
         $client = new Client([
             'verify' => config('agentconfig.tenant.verify_ssl', true),
             'timeout' => 30,
