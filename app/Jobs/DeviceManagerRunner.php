@@ -35,7 +35,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
 
         $device = $this->device;
 
-        \Log::info($device);
+        \Log::info(json_decode($device));
 
         if ($device->device_username && $device->device_password) {
             $process = $this->runBackupCommand($device);
