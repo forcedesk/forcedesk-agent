@@ -3,7 +3,12 @@
 namespace App\Console\Commands\Services;
 
 use App\Helper\AgentConnectivityHelper;
+use App\Jobs\DeviceManagerRunner;
+use App\Jobs\ProbeDispatch;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 
 class DeviceManagerService extends Command
 {
@@ -24,180 +29,112 @@ class DeviceManagerService extends Command
     public function handle()
     {
 
-        // Find all the switches to backup.
-        $devices = DeviceManagerDevices::all();
-        $backupcount = 0;
-        $errors = 0;
-        $backuptype = $this->option('type');
+        $batchid = Str::uuid();
 
-        $this->comment('['.\Carbon\Carbon::now().'] Backups Started');
+        $test = AgentConnectivityHelper::testConnectivity();
 
-        // Create a unique batch ID for the jobs.
-        $batchid = Str::random(8);
-
-        foreach ($devices as $device) {
-
-            // If backups are disabled for the device, do not include it.
-            if ($device->backups_enabled == false) {
-                $log = new DeviceManagerLogs;
-                $log->device_id = $device->id;
-                $log->logdata = '['.$batchid.'] Backups are disabled for Device: '.$device->name.'. Skipping.';
-                $this->info('['.\Carbon\Carbon::now().'] Backups are disabled for Device: '.$device->name.'. Skipping.');
-                $log->save();
-
-                return false;
-            }
-
-            // Set Backup as Pending.
-            $device->backup_pending = true;
-            $device->save();
-
-            $log = new DeviceManagerLogs;
-            $log->device_id = $device->id;
-            $log->logdata = '['.$batchid.'] Performing Backup on Device: '.$device->name;
-            $this->info('['.\Carbon\Carbon::now().'] Performing Backup on Device: '.$device->name);
-            $log->save();
-
-            // If the device has backups enabled and has a credential attached, perform the backup.
-            if ($device->credential) {
-
-                // Store the credential as a temporary file.
-                $passwordfile = tmpfile();
-
-                $passwordfileuri = stream_get_meta_data($passwordfile)['uri'];
-
-                fwrite($passwordfile, $device->credential->password);
-
-                // The following is tailored for Cisco IOS/IOS-XE devices using password auth. May move to public key auth in future.
-                if ($device->type == 'cisco') {
-                    $process = Process::run('sshpass -f '.$passwordfileuri.' ssh -p '.$device->port.' -o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1 '.$device->credential->username.'@'.$device->hostname." 'more system:running-config'");
-                } elseif ($device->type == 'mikrotik') {
-                    $process = Process::run('sshpass -f '.$passwordfileuri.' ssh -p '.$device->port.' -o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1 '.$device->credential->username.'@'.$device->hostname." 'export show-sensitive verbose'");
-                }
-
-                if ($process->successful()) {
-
-                    if (strlen($process->output()) >= 10) {
-
-                        // For Cisco IOS/IOS-XE devices strip dynamic data before the version number.\
-                        $output = $process->output();
-
-                        if ($device->type == 'cisco') {
-                            $garbagestring = strstr($output, '!');
-                            $configdata = strstr($garbagestring, 'version');
-                        } elseif ($device->type == 'mikrotik') {
-                            $configdata = strstr($output, '/interface');
-                        }
-
-                        // See if there is an existing backup and check whether it matches the current backup.
-                        $latest_backup = DeviceManagerBackups::latest()->where('device_id', $device->id)->first();
-
-                        if (strlen($configdata) >= 10) {
-                            if ($backuptype == 'monthly') {
-
-                                $backup = new DeviceManagerBackups;
-                                $backup->device_id = $device->id;
-
-                                $backup->data = $configdata;
-                                $backup->uuid = Str::uuid();
-                                $backup->batch = $batchid;
-                                $backup->size = strlen($backup->data);
-                                $backup->save();
-
-                                $log = new DeviceManagerLogs;
-                                $log->device_id = $device->id;
-                                $log->logdata = '['.$batchid.'] Monthly Full Backup for Device: '.$device->name.' was successful';
-                                $this->info('['.\Carbon\Carbon::now().'] Monthly Full Backup for Device: '.$device->name.' was successful');
-                                $log->save();
-                                $backupcount++;
-
-                                $device->backup_pending = false;
-                                $device->lastbackedup_at = now();
-                                $device->save();
-
-                            } elseif ($latest_backup && hash('sha512', $latest_backup->data) == hash('sha512', $configdata)) {
-
-                                $log = new DeviceManagerLogs;
-                                $log->device_id = $device->id;
-                                $log->logdata = '['.$batchid.'] Skipped Backing Up Device: '.$device->name.'. No changes were detected.';
-                                $this->info('['.$batchid.'] Skipped Backing Up Device: '.$device->name.'. No changes were detected.');
-                                $log->save();
-
-                                $device->backup_pending = false;
-                                $device->lastbackedup_at = now();
-                                $device->save();
-
-                            } else {
-                                $backup = new DeviceManagerBackups;
-                                $backup->device_id = $device->id;
-
-                                $backup->data = $configdata;
-                                $backup->uuid = Str::uuid();
-                                $backup->batch = $batchid;
-                                $backup->size = strlen($backup->data);
-                                $backup->save();
-
-                                $log = new DeviceManagerLogs;
-                                $log->device_id = $device->id;
-                                $log->logdata = '['.$batchid.'] Backup for Device: '.$device->name.' was successful';
-                                $this->info('['.\Carbon\Carbon::now().'] Backup for Device: '.$device->name.' was successful');
-                                $log->save();
-                                $backupcount++;
-
-                                $device->backup_pending = false;
-                                $device->lastbackedup_at = now();
-                                $device->save();
-                            }
-
-                        } else {
-                            $log = new DeviceManagerLogs;
-                            $log->device_id = $device->id;
-                            $log->logdata = '['.$batchid.'] Backup for Device: '.$device->name.' was unsuccessful. No data was returned from the device. See Framework Logs';
-                            $this->error('['.\Carbon\Carbon::now().'] Backup for Device: '.$device->name.' was unsuccessful. No data was returned from the device. See Framework Logs');
-                            \Log::info('Failed Backup for ID: '.$device->id.'. Data: '.base64_encode($process->output()));
-                            $log->save();
-                            $errors++;
-
-                            $device->backup_pending = false;
-                            $device->save();
-                        }
-
-                    } else {
-                        $log = new DeviceManagerLogs;
-                        $log->device_id = $device->id;
-                        $log->logdata = '['.$batchid.'] Backup for Device: '.$device->name.' failed. No data was returned from the device. See Framework Logs.';
-                        $this->error('['.\Carbon\Carbon::now().'] Backup for Device: '.$device->name.' failed. No data was returned from the device. See Framework Logs.');
-                        \Log::info('Failed Backup for ID: '.$device->id.'. Data: '.base64_encode($process->output()));
-                        $errors++;
-                        $log->save();
-
-                        $device->backup_pending = false;
-                        $device->save();
-                    }
-
-                } elseif ($process->failed()) {
-                    $log = new DeviceManagerLogs;
-                    $log->device_id = $device->id;
-                    $log->logdata = '['.$batchid.'] Backup for Device: '.$device->name.' failed. Reason: '.$process->output();
-                    $this->error('['.\Carbon\Carbon::now().'] Backup for Device: '.$device->name.' failed.');
-                    $errors++;
-                    $log->save();
-
-                    $device->backup_pending = false;
-                    $device->save();
-                }
-
-                // Overwrite the temporary file with garbage.
-                fwrite($passwordfile, Str::random(4096));
-                fclose($passwordfile);
-
-            }
+        if(!$test)
+        {
+            \Log::error('Could not connect to the SchoolDesk instance.');
+            $this->error('Connectivity failed to the SchoolDesk instance. Bailing out');
+            return Command::FAILURE;
         }
 
-        if ($errors > 0) {
-            $this->error('['.\Carbon\Carbon::now().'] Backups completed at with '.$errors.' errors.');
-        } else {
-            $this->comment('['.\Carbon\Carbon::now().'] Backups completed with no errors.');
+        $client = new Client([
+            'verify' => config('agentconfig.tenant.verify_ssl', true),
+            'timeout' => 30,
+            'connect_timeout' => 10,
+            'headers' => array(
+                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Content-Type' => 'application/json',
+                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agentversion' => config('app.agent_version'),
+            )
+        ]);
+
+        try {
+            $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/payloads');
+
+            if ($request->getStatusCode() !== 200) {
+                \Log::error('device manager service received non-200 status code', [
+                    'status_code' => $request->getStatusCode()
+                ]);
+                $this->error('Failed to fetch device manager payloads. Status: ' . $request->getStatusCode());
+                return Command::FAILURE;
+            }
+
+            $response = $request->getBody()->getContents();
+
+            $data = json_decode($response, false);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                \Log::error('Invalid JSON response from device manager service', [
+                    'error' => json_last_error_msg()
+                ]);
+                $this->error('Invalid JSON response from device manager service');
+                return Command::FAILURE;
+            }
+
+            if (!is_array($data) && !is_object($data)) {
+                \Log::error('Unexpected data type from device manager service', [
+                    'type' => gettype($data)
+                ]);
+                $this->error('Unexpected response format from device manager service');
+                return Command::FAILURE;
+            }
+
+            if (count($data) === 0)
+            {
+                \Log::info('No device manager payloads received');
+                $this->info('No device manager payloads received');
+                return Command::SUCCESS;
+            }
+
+            $dispatchedCount = 0;
+
+            foreach($data as $item)
+            {
+                if (!isset($item->payload_data) || !is_array($item->payload_data)) {
+                    \Log::warning('Skipping item with missing or invalid payload_data', [
+                        'item' => $item
+                    ]);
+                    continue;
+                }
+
+                foreach ($item->payload_data as $payload) {
+                    try {
+                        DeviceManagerRunner::dispatch($payload, $batchid);
+                        $dispatchedCount++;
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to dispatch backup', [
+                            'payload' => $payload,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+            }
+
+            \Log::info('Device Manager service completed successfully', [
+                'payloads_dispatched' => $dispatchedCount
+            ]);
+            $this->info("Successfully dispatched {$dispatchedCount} device manager backup(s)");
+
+            return Command::SUCCESS;
+
+        } catch (GuzzleException $e) {
+            \Log::error('HTTP request failed in monitoring service', [
+                'error' => $e->getMessage(),
+                'url' => config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/payloads'
+            ]);
+            $this->error('HTTP request failed: ' . $e->getMessage());
+            return Command::FAILURE;
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error in device manager service', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->error('Unexpected error: ' . $e->getMessage());
+            return Command::FAILURE;
         }
 
     }
