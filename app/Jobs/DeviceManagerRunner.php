@@ -72,7 +72,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
         $baseCommand = "sshpass -f $passwordFileUri ssh -p {$device->port} ";
         $legacyCommand = config('applicationconfig.device_manager.legacycommand');
         $options = $device->is_cisco_legacy ? "$legacyCommand {$device->device_username}@{$device->hostname} 'show running-config view full'"
-            : "-o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1 {$device->device_username}@{$device->hostname} 'show running-config view full'";
+            : "-o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1 -o HostKeyAlgorithms=+ssh-rsa {$device->device_username}@{$device->hostname} 'show running-config view full'";
 
         return $baseCommand.$options;
     }
