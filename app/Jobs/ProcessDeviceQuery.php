@@ -61,7 +61,14 @@ class ProcessDeviceQuery implements ShouldQueue
         $isCiscoLegacy = $payloadData->is_cisco_legacy ?? false;
 
         if (!$deviceHostname || !$username || !$password || !$command) {
-            Log::error("Missing required payload data", ['payload_id' => $payloadId]);
+            Log::error("Missing required payload data", [
+                'payload_id' => $payloadId,
+                'device_hostname' => $deviceHostname,
+                'username' => $username,
+                'has_password' => !empty($password),
+                'command' => $command,
+                'payload_data' => $payloadData,
+            ]);
             $this->postResponse($payloadId, [
                 'status' => 'error',
                 'error' => 'Missing required payload data',
