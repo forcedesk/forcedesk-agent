@@ -105,6 +105,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
             'data' => $configData,
             'uuid' => Str::uuid(),
             'batch' => $this->batchid,
+            'is_forced' => $device->is_forced,
             'size' => strlen($configData),
             'status' => 'success',
             'log' => "Backup for Device: {$device->name} was successful."
