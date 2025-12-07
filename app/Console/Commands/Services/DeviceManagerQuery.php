@@ -28,7 +28,7 @@ class DeviceManagerQuery extends Command
      */
     public function handle()
     {
-        $pollInterval = 30; // Check every 2 seconds
+        $pollInterval = 15; // Check every 2 seconds
         $maxRuntime = 300; // Run for 300 seconds (5 minutes)
 
         $startTime = time();
