@@ -48,17 +48,24 @@ class ProcessDeviceQuery implements ShouldQueue
         $payloadId = $this->payload['id'];
         $payloadData = $this->payload['payload_data'];
 
+        // Ensure payload_data is an array (decode if it's a JSON string or object)
+        if (is_string($payloadData)) {
+            $payloadData = json_decode($payloadData, true);
+        } elseif (is_object($payloadData)) {
+            $payloadData = (array) $payloadData;
+        }
+
         Log::info("Processing device query payload", ['payload_id' => $payloadId]);
 
-        // Extract payload information
-        $deviceHostname = $payloadData->device_hostname ?? null;
-        $username = $payloadData->username ?? null;
-        $password = $payloadData->password ?? null;
-        $port = $payloadData->port ?? 22;
-        $command = $payloadData->command ?? null;
-        $deviceType = $payloadData->device_type ?? 'cisco';
-        $action = $payloadData->action ?? 'unknown';
-        $isCiscoLegacy = $payloadData->is_cisco_legacy ?? false;
+        // Extract payload information from array
+        $deviceHostname = $payloadData['device_hostname'] ?? null;
+        $username = $payloadData['username'] ?? null;
+        $password = $payloadData['password'] ?? null;
+        $port = $payloadData['port'] ?? 22;
+        $command = $payloadData['command'] ?? null;
+        $deviceType = $payloadData['device_type'] ?? 'cisco';
+        $action = $payloadData['action'] ?? 'unknown';
+        $isCiscoLegacy = $payloadData['is_cisco_legacy'] ?? false;
 
         if (!$deviceHostname || !$username || !$password || !$command) {
             Log::error("Missing required payload data", [
