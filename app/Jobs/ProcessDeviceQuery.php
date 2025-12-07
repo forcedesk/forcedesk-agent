@@ -181,10 +181,10 @@ class ProcessDeviceQuery implements ShouldQueue
             return false;
         }
 
-        // Filter out "Connection to X.X.X.X closed by remote host." messages
-        $output = array_filter($output, function($line) {
-            return !preg_match('/^Connection to \d+\.\d+\.\d+\.\d+ closed( by remote host)?\.?$/i', trim($line));
-        });
+        // Remove "Connection to X.X.X.X closed by remote host." text from output
+        $output = array_map(function($line) {
+            return preg_replace('/Connection to \d+\.\d+\.\d+\.\d+ closed( by remote host)?\.?/i', '', $line);
+        }, $output);
 
         return implode("\n", $output);
     }
