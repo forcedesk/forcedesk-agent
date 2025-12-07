@@ -70,7 +70,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
     protected function getCiscoCommand($device, $passwordFileUri): string
     {
         $baseCommand = "sshpass -f $passwordFileUri ssh -p {$device->port} ";
-        $legacyCommand = config('applicationconfig.device_manager.legacycommand');
+        $legacyCommand = config('agentconfig.device_manager.legacycommand');
         $options = $device->is_cisco_legacy ? "$legacyCommand {$device->device_username}@{$device->hostname} 'show running-config view full'"
             : "-o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1 {$device->device_username}@{$device->hostname} 'show running-config view full'";
 
