@@ -67,8 +67,9 @@ class ProcessDeviceQuery implements ShouldQueue
         $action = $payloadData['action'] ?? 'unknown';
         $isCiscoLegacy = $payloadData['is_cisco_legacy'] ?? false;
 
+        /* The whitelist of allowed commands */
         $allowedCommands = [
-            'show hardwares',
+            'show hardware',
             'show mac address-table',
             'show log',
             'show interfaces status',
