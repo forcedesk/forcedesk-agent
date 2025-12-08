@@ -67,6 +67,38 @@ class ProcessDeviceQuery implements ShouldQueue
         $action = $payloadData['action'] ?? 'unknown';
         $isCiscoLegacy = $payloadData['is_cisco_legacy'] ?? false;
 
+        $allowedCommands = [
+            'show hardware',
+            'show mac address-table',
+            'show log',
+            'show interfaces status',
+            'show running-config',
+            'show running-config view full',
+            'log print',
+            'export show-sensitive',
+            'interface print brief',
+            'interface ethernet switch host print; interface bridge host print',
+            'system routerboard print'
+        ];
+
+        /* If the requested command is not in the allowed list, return an error */
+        if(!in_array($command, $allowedCommands)) {
+            Log::error("Requested command was not valid.", [
+                'payload_id' => $payloadId,
+                'device_hostname' => $deviceHostname,
+                'username' => $username,
+                'has_password' => !empty($password),
+                'command' => $command,
+                'payload_data' => $payloadData,
+            ]);
+            $this->postResponse($payloadId, [
+                'status' => 'error',
+                'error' => 'Requested command was not valid',
+                'timestamp' => now()->toDateTimeString(),
+            ]);
+            return;
+        }
+
         if (!$deviceHostname || !$username || !$password || !$command) {
             Log::error("Missing required payload data", [
                 'payload_id' => $payloadId,
@@ -144,7 +176,7 @@ class ProcessDeviceQuery implements ShouldQueue
      */
     protected function executeSSHCommand($hostname, $port, $username, $password, $command, $isLegacy = false)
     {
-        // Use a temporary file for storing credentials
+
         $passwordFile = tmpfile();
         $passwordFileUri = stream_get_meta_data($passwordFile)['uri'];
         fwrite($passwordFile, $password);
