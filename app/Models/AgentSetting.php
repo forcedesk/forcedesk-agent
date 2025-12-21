@@ -25,15 +25,21 @@ class AgentSetting extends Model
      */
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        return Cache::remember("agent_setting_{$key}", 3600, function () use ($key, $default) {
+        try {
+            return Cache::remember("agent_setting_{$key}", 3600, function () use ($key, $default) {
+                $setting = self::where('key', $key)->first();
+
+                if (!$setting) {
+                    return $default;
+                }
+
+                return self::castValue($setting->value, $setting->type);
+            });
+        } catch (\Exception $e) {
+            // If cache fails, get directly from database
             $setting = self::where('key', $key)->first();
-
-            if (!$setting) {
-                return $default;
-            }
-
-            return self::castValue($setting->value, $setting->type);
-        });
+            return $setting ? self::castValue($setting->value, $setting->type) : $default;
+        }
     }
 
     /**
@@ -51,7 +57,11 @@ class AgentSetting extends Model
             ]
         );
 
-        Cache::forget("agent_setting_{$key}");
+        try {
+            Cache::forget("agent_setting_{$key}");
+        } catch (\Exception $e) {
+            // Cache operation failed, but setting was saved to database
+        }
     }
 
     /**
@@ -97,9 +107,13 @@ class AgentSetting extends Model
      */
     public static function clearCache(): void
     {
-        $settings = self::all();
-        foreach ($settings as $setting) {
-            Cache::forget("agent_setting_{$setting->key}");
+        try {
+            $settings = self::all();
+            foreach ($settings as $setting) {
+                Cache::forget("agent_setting_{$setting->key}");
+            }
+        } catch (\Exception $e) {
+            // Cache clearing failed, continue anyway
         }
     }
 }
