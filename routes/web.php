@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AgentSettingsController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,10 +15,18 @@ use App\Http\Controllers\AgentSettingsController;
 |
 */
 
-Route::get('/agent-settings', [AgentSettingsController::class, 'index'])->name('agent-settings.index');
-Route::get('/agent-settings/all', [AgentSettingsController::class, 'getAll'])->name('agent-settings.all');
-Route::put('/agent-settings', [AgentSettingsController::class, 'update'])->name('agent-settings.update');
-Route::put('/agent-settings/{id}', [AgentSettingsController::class, 'updateSingle'])->name('agent-settings.update-single');
-Route::post('/agent-settings/import', [AgentSettingsController::class, 'importFromConfig'])->name('agent-settings.import');
-Route::post('/agent-settings/clear-cache', [AgentSettingsController::class, 'clearCache'])->name('agent-settings.clear-cache');
-Route::post('/agent-settings/test-connection', [AgentSettingsController::class, 'testConnection'])->name('agent-settings.test-connection');
+// Authentication routes
+Route::get('/login', [AuthController::class, 'showLogin'])->name('agent.login');
+Route::post('/login', [AuthController::class, 'login'])->name('agent.login.post');
+Route::post('/logout', [AuthController::class, 'logout'])->name('agent.logout');
+
+// Protected routes - require authentication
+Route::middleware('agent.auth')->group(function () {
+    Route::get('/agent-settings', [AgentSettingsController::class, 'index'])->name('agent-settings.index');
+    Route::get('/agent-settings/all', [AgentSettingsController::class, 'getAll'])->name('agent-settings.all');
+    Route::put('/agent-settings', [AgentSettingsController::class, 'update'])->name('agent-settings.update');
+    Route::put('/agent-settings/{id}', [AgentSettingsController::class, 'updateSingle'])->name('agent-settings.update-single');
+    Route::post('/agent-settings/import', [AgentSettingsController::class, 'importFromConfig'])->name('agent-settings.import');
+    Route::post('/agent-settings/clear-cache', [AgentSettingsController::class, 'clearCache'])->name('agent-settings.clear-cache');
+    Route::post('/agent-settings/test-connection', [AgentSettingsController::class, 'testConnection'])->name('agent-settings.test-connection');
+});

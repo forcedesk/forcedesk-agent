@@ -70,7 +70,17 @@ npm install
 php artisan migrate
 ```
 
-### 3. Import Initial Settings
+### 3. Set Admin Password
+
+Add the admin password to your `.env` file:
+
+```bash
+AGENT_ADMIN_PASSWORD=your-secure-password-here
+```
+
+This password will be required to access the settings interface.
+
+### 4. Import Initial Settings
 
 You can import settings from the config file in two ways:
 
@@ -81,18 +91,21 @@ php artisan db:seed --class=AgentConfigSeeder
 
 **Option B: Via Web Interface**
 - Navigate to `/agent-settings`
+- Login with your admin password
 - Click "Import from Config" button
 
-### 4. Build Frontend Assets
+### 5. Build Frontend Assets
 
 ```bash
 npm run dev    # For development
 npm run build  # For production
 ```
 
-### 5. Access the Settings Interface
+### 6. Access the Settings Interface
 
-Navigate to: `http://your-domain/agent-settings`
+1. Navigate to: `http://your-domain/login`
+2. Enter your admin password
+3. You'll be redirected to the settings panel at `/agent-settings`
 
 ## Usage
 
@@ -128,6 +141,12 @@ AgentConfig::clearCache();
 
 ### Routes
 
+**Authentication Routes:**
+- `GET /login` - Login page
+- `POST /login` - Handle login
+- `POST /logout` - Logout
+
+**Protected Settings Routes (require authentication):**
 - `GET /agent-settings` - Settings management interface
 - `GET /agent-settings/all` - Get all settings (JSON)
 - `PUT /agent-settings` - Update multiple settings
@@ -149,10 +168,12 @@ Settings are organized into groups matching the original config file:
 
 ## Security Features
 
-1. **Sensitive Field Masking**: Password and API key fields are masked in the UI
-2. **Type Safety**: Values are type-cast based on their declared type
-3. **Caching**: Settings are cached for 1 hour to reduce database queries
-4. **Fallback**: If database value doesn't exist, falls back to config file
+1. **Password Authentication**: Settings panel protected by password stored in .env file
+2. **Session-based Auth**: Simple session authentication without database user tables
+3. **Sensitive Field Masking**: Password and API key fields are masked in the UI
+4. **Type Safety**: Values are type-cast based on their declared type
+5. **Caching**: Settings are cached for 1 hour to reduce database queries
+6. **Fallback**: If database value doesn't exist, falls back to config file
 
 ## Caching
 
