@@ -44,9 +44,12 @@
 
                 <div class="px-4 py-5 sm:p-6">
                     <div v-for="(groupSettings, groupName) in localSettings" :key="groupName" class="mb-8">
-                        <h4 class="text-md font-semibold text-gray-900 mb-4 capitalize border-b pb-2">
-                            {{ groupName }} Settings
-                        </h4>
+                        <div class="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+                            <component :is="getGroupIcon(groupName)" class="h-5 w-5 text-indigo-600" />
+                            <h4 class="text-md font-semibold text-gray-900">
+                                {{ formatGroupName(groupName) }} Settings
+                            </h4>
+                        </div>
                         <div class="space-y-4">
                             <div
                                 v-for="setting in groupSettings"
@@ -89,9 +92,18 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import {
+    Cloud,
+    HardDrive,
+    FileText,
+    Printer,
+    Network,
+    GraduationCap,
+    Users
+} from 'lucide-vue-next';
 
 const props = defineProps({
     settings: Object,
@@ -102,6 +114,25 @@ const localSettings = reactive({ ...props.settings });
 const saving = ref(false);
 const message = ref('');
 const error = ref('');
+
+// Map group names to icons
+const groupIcons = {
+    tenant: Cloud,
+    device_manager: HardDrive,
+    logging: FileText,
+    papercut: Printer,
+    proxies: Network,
+    emc: GraduationCap,
+    ldap: Users,
+};
+
+function getGroupIcon(groupName) {
+    return groupIcons[groupName] || FileText;
+}
+
+function formatGroupName(groupName) {
+    return groupName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
 
 function formatKey(key) {
     const parts = key.split('.');
