@@ -153,4 +153,56 @@ class AgentSettingsController extends Controller
             'message' => 'Connection test not yet implemented',
         ]);
     }
+
+    /**
+     * Export settings to agentconfig.php format
+     */
+    public function exportConfig()
+    {
+        $settings = AgentSetting::all()->groupBy('group');
+
+        $config = "<?php\n\nreturn [\n\n";
+
+        foreach ($settings as $group => $groupSettings) {
+            $config .= "    '{$group}' => [\n";
+
+            foreach ($groupSettings as $setting) {
+                // Extract the setting name from the full key (e.g., 'tenant.tenant_url' -> 'tenant_url')
+                $parts = explode('.', $setting->key);
+                $settingName = end($parts);
+
+                // Add comment for sensitive fields
+                if ($setting->is_sensitive) {
+                    $config .= "        // Sensitive: {$settingName}\n";
+                }
+
+                // Format the value based on type
+                $value = $this->formatConfigValue($setting->value, $setting->type);
+
+                $config .= "        '{$settingName}' => {$value},\n";
+            }
+
+            $config .= "    ],\n";
+        }
+
+        $config .= "];\n";
+
+        return response($config)
+            ->header('Content-Type', 'text/plain')
+            ->header('Content-Disposition', 'attachment; filename="agentconfig.php"');
+    }
+
+    /**
+     * Format a value for PHP config file export
+     */
+    private function formatConfigValue($value, $type): string
+    {
+        return match ($type) {
+            'boolean' => $value ? 'true' : 'false',
+            'integer' => (string) $value,
+            'float' => (string) $value,
+            'json' => var_export(json_decode($value, true), true),
+            default => $value === null ? 'null' : "'" . addslashes($value) . "'",
+        };
+    }
 }

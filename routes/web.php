@@ -27,6 +27,7 @@ Route::middleware('agent.auth')->group(function () {
     Route::put('/agent-settings', [AgentSettingsController::class, 'update'])->name('agent-settings.update');
     Route::put('/agent-settings/{id}', [AgentSettingsController::class, 'updateSingle'])->name('agent-settings.update-single');
     Route::post('/agent-settings/import', [AgentSettingsController::class, 'importFromConfig'])->name('agent-settings.import');
+    Route::get('/agent-settings/export', [AgentSettingsController::class, 'exportConfig'])->name('agent-settings.export');
     Route::post('/agent-settings/clear-cache', [AgentSettingsController::class, 'clearCache'])->name('agent-settings.clear-cache');
     Route::post('/agent-settings/test-connection', [AgentSettingsController::class, 'testConnection'])->name('agent-settings.test-connection');
 });
