@@ -1,11 +1,16 @@
 <template>
     <div class="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div class="max-w-md w-full space-y-8">
-            <div>
-                <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    SchoolDesk Agent
+            <div class="text-center">
+                <img
+                    src="https://cdn.forcedesk.io/img/forcedesk-icon-test.svg"
+                    alt="ForceDesk Logo"
+                    class="mx-auto h-16 w-16 mb-4"
+                />
+                <h2 class="mt-2 text-3xl font-extrabold text-gray-900">
+                    ForceDesk Agent
                 </h2>
-                <p class="mt-2 text-center text-sm text-gray-600">
+                <p class="mt-2 text-sm text-gray-600">
                     Configuration Panel
                 </p>
             </div>
@@ -25,12 +30,19 @@
                     </div>
                 </div>
 
-                <div v-if="errors.password" class="text-red-600 text-sm">
-                    {{ errors.password }}
-                </div>
-
-                <div v-if="message" class="text-green-600 text-sm">
-                    {{ message }}
+                <div v-if="errors.password" class="rounded-md bg-red-50 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-red-800">
+                                {{ errors.password }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -78,23 +90,19 @@ const form = ref({
 });
 
 const loading = ref(false);
-const message = ref('');
 
 function handleLogin() {
     loading.value = true;
-    message.value = '';
 
     router.post('/login', form.value, {
-        onSuccess: () => {
-            message.value = 'Login successful!';
-            form.value.password = '';
-        },
-        onError: () => {
+        onError: (errors) => {
+            // Errors are automatically handled by Inertia and passed to the component
             loading.value = false;
         },
         onFinish: () => {
             loading.value = false;
         },
+        preserveScroll: true,
     });
 }
 </script>
