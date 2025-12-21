@@ -171,9 +171,9 @@ class AgentSettingsController extends Controller
                 $parts = explode('.', $setting->key);
                 $settingName = end($parts);
 
-                // Add comment for sensitive fields
-                if ($setting->is_sensitive) {
-                    $config .= "        // Sensitive: {$settingName}\n";
+                // Add description as comment if available
+                if ($setting->description) {
+                    $config .= "        // {$setting->description}\n";
                 }
 
                 // Format the value based on type

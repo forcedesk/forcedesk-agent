@@ -58,11 +58,11 @@
                             >
                                 <div class="sm:col-span-1">
                                     <label :for="`setting-${setting.id}`" class="block text-sm font-medium text-gray-700">
-                                        {{ formatKey(setting.key) }}
-                                        <span v-if="setting.is_sensitive" class="text-red-500">*</span>
+                                        {{ setting.description || formatKey(setting.key) }}
+                                        <span v-if="setting.is_sensitive" class="text-red-500 ml-1">*</span>
                                     </label>
-                                    <p v-if="setting.description" class="mt-1 text-xs text-gray-500">
-                                        {{ setting.description }}
+                                    <p v-if="!setting.description" class="mt-1 text-xs text-gray-500">
+                                        {{ formatKey(setting.key) }}
                                     </p>
                                 </div>
                                 <div class="sm:col-span-2">
