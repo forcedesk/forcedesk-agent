@@ -155,7 +155,7 @@ class AgentSettingsController extends Controller
     }
 
     /**
-     * Export settings to agentconfig.php format
+     * Export settings to config/agentconfig.php file
      */
     public function exportConfig()
     {
@@ -187,9 +187,14 @@ class AgentSettingsController extends Controller
 
         $config .= "];\n";
 
-        return response($config)
-            ->header('Content-Type', 'text/plain')
-            ->header('Content-Disposition', 'attachment; filename="agentconfig.php"');
+        // Write to config/agentconfig.php
+        $configPath = config_path('agentconfig.php');
+        file_put_contents($configPath, $config);
+
+        return response()->json([
+            'message' => 'Configuration exported successfully to config/agentconfig.php',
+            'path' => $configPath,
+        ]);
     }
 
     /**
