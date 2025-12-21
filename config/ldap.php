@@ -29,22 +29,22 @@ return [
     'connections' => [
 
         'default' => [
-            'hosts' => !empty(config('agentconfig.ldap.ad_dc')) ? [config('agentconfig.ldap.ad_dc')] : [],
-            'username' => env('LDAP_USERNAME', config('agentconfig.ldap.ad_svc_user_cn')),
-            'password' => env('LDAP_PASSWORD', config('agentconfig.ldap.ad_svc_password')),
+            'hosts' => !empty(agent_config('ldap.ad_dc')) ? [agent_config('ldap.ad_dc')] : [],
+            'username' => env('LDAP_USERNAME', agent_config('ldap.ad_svc_user_cn')),
+            'password' => env('LDAP_PASSWORD', agent_config('ldap.ad_svc_password')),
             'port' => env('LDAP_PORT', 636),
-            'base_dn' => env('LDAP_BASE_DN', config('agentconfig.ldap.ad_base_dn')),
+            'base_dn' => env('LDAP_BASE_DN', agent_config('ldap.ad_base_dn')),
             'timeout' => env('LDAP_TIMEOUT', 5),
             'use_ssl' => env('LDAP_SSL', true),
             'use_tls' => env('LDAP_TLS', false),
         ],
 
         'ldap' => [
-            'hosts' => !empty(config('agentconfig.ldap.ad_dc')) ? [config('agentconfig.ldap.ad_dc')] : [],
-            'username' => env('LDAP_USERNAME', config('agentconfig.ldap.ad_svc_user_cn')),
-            'password' => env('LDAP_PASSWORD', config('agentconfig.ldap.ad_svc_password')),
+            'hosts' => !empty(agent_config('ldap.ad_dc')) ? [agent_config('ldap.ad_dc')] : [],
+            'username' => env('LDAP_USERNAME', agent_config('ldap.ad_svc_user_cn')),
+            'password' => env('LDAP_PASSWORD', agent_config('ldap.ad_svc_password')),
             'port' => env('LDAP_PORT', 636),
-            'base_dn' => env('LDAP_BASE_DN', config('agentconfig.ldap.ad_base_dn')),
+            'base_dn' => env('LDAP_BASE_DN', agent_config('ldap.ad_base_dn')),
             'timeout' => env('LDAP_TIMEOUT', 5),
             'use_ssl' => env('LDAP_SSL', true),
             'use_tls' => env('LDAP_TLS', false),

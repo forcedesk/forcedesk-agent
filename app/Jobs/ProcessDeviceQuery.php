@@ -229,12 +229,12 @@ class ProcessDeviceQuery implements ShouldQueue
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                 'x-forcedesk-agentversion' => config('app.agent_version'),
                 'Accept' => 'application/json',
-            ])->post(config('agentconfig.tenant.tenant_url') . "/api/agent/devicemanager/query-response", [
+            ])->post(agent_config('tenant.tenant_url') . "/api/agent/devicemanager/query-response", [
                 'payload_id' => $payloadId,
                 'response_data' => $responseData,
             ]);

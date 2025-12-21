@@ -37,13 +37,13 @@ class ProbeDispatch implements ShouldQueue
 
             /* Generate a new Guzzle Client for handling the payload from SchoolDesk */
             $client = new Client([
-                'verify' => config('agentconfig.tenant.verify_ssl', true),
+                'verify' => agent_config('tenant.verify_ssl', true),
                 'timeout' => 30,
                 'connect_timeout' => 10,
                 'headers' => [
-                    'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                    'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                     'Content-Type' => 'application/json',
-                    'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                    'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                     'x-forcedesk-agentversion' => config('app.agent_version'),
                 ]
             ]);
@@ -176,7 +176,7 @@ class ProbeDispatch implements ShouldQueue
         ];
 
         try {
-            $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/monitoring/response', [
+            $response = $client->post(agent_config('tenant.tenant_url') . '/api/agent/monitoring/response', [
                 'headers' => [],
                 'body' => json_encode($data),
             ]);

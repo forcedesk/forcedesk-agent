@@ -17,9 +17,9 @@ class ProxyMiddleware
     {
 
         /*
-        if (config()->has('agentconfig.proxies.address') && config('agentconfig.proxies.address') !== null) {
-            config(['http.proxy' => config('agentconfig.proxies.address')]);
-            config(['https.proxy' => config('agentconfig.proxies.address')]);
+        if (config()->has('agentconfig.proxies.address') && agent_config('proxies.address') !== null) {
+            config(['http.proxy' => agent_config('proxies.address')]);
+            config(['https.proxy' => agent_config('proxies.address')]);
         }
         */
 

@@ -42,13 +42,13 @@ class CommandQueueService extends Command
         }
 
         $client = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+            'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
-            'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
             'x-forcedesk-agentversion' => config('app.agent_version'),
         )]);
 
-        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/command-queues');
+        $request = $client->get(agent_config('tenant.tenant_url') . '/api/agent/command-queues');
 
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);

@@ -41,19 +41,19 @@ class DeviceManagerService extends Command
         }
 
         $client = new Client([
-            'verify' => config('agentconfig.tenant.verify_ssl', true),
+            'verify' => agent_config('tenant.verify_ssl', true),
             'timeout' => 30,
             'connect_timeout' => 10,
             'headers' => array(
-                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                 'x-forcedesk-agentversion' => config('app.agent_version'),
             )
         ]);
 
         try {
-            $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/payloads');
+            $request = $client->get(agent_config('tenant.tenant_url') . '/api/agent/devicemanager/payloads');
 
             if ($request->getStatusCode() !== 200) {
                 \Log::error('device manager service received non-200 status code', [
@@ -124,7 +124,7 @@ class DeviceManagerService extends Command
         } catch (GuzzleException $e) {
             \Log::error('HTTP request failed in monitoring service', [
                 'error' => $e->getMessage(),
-                'url' => config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/payloads'
+                'url' => agent_config('tenant.tenant_url') . '/api/agent/devicemanager/payloads'
             ]);
             $this->error('HTTP request failed: ' . $e->getMessage());
             return Command::FAILURE;
