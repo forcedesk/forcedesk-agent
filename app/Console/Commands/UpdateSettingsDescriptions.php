@@ -20,26 +20,26 @@ class UpdateSettingsDescriptions extends Command
             'tenant.verify_ssl' => 'Verify SSL certificates when connecting to the tenant',
 
             // Device Manager settings
-            'device_manager.legacycommand' => 'Legacy SSH command options for older Cisco devices',
+            'device_manager.legacycommand' => 'Legacy Command for Device Manager',
 
             // Logging settings
             'logging.enabled' => 'Enable or disable detailed logging for this agent',
 
             // PaperCut settings
-            'papercut.api_url' => 'PaperCut server API URL (e.g., http://papercut-server:9191/api)',
-            'papercut.api_key' => 'Authentication key for PaperCut API access',
-            'papercut.enabled' => 'Enable or disable PaperCut integration',
+            'papercut.api_url' => 'Your Papercut Server URL',
+            'papercut.api_key' => 'Your Papercut API Key',
+            'papercut.enabled' => 'Enable Papercut Integration',
 
             // Proxy settings
             'proxies.address' => 'HTTP/HTTPS proxy server address (e.g., http://proxy.example.com:8080)',
 
             // EMC/Edustar settings
-            'emc.emc_url' => 'Edustar Management Console API endpoint URL',
-            'emc.emc_username' => 'Username for Edustar MC authentication',
-            'emc.emc_password' => 'Password for Edustar MC authentication',
-            'emc.emc_school_code' => 'Your school code in the Edustar system',
-            'emc.emc_crt_group_dn' => 'Distinguished Name of the CRT group in Active Directory',
-            'emc.emc_crt_group_name' => 'Name of the CRT group for student accounts',
+            'emc.emc_url' => 'EduSTAR MC URL',
+            'emc.emc_username' => 'Username',
+            'emc.emc_password' => 'Password',
+            'emc.emc_school_code' => 'Your School Code',
+            'emc.emc_crt_group_dn' => 'CRT Group DN',
+            'emc.emc_crt_group_name' => 'CRT Group Name',
 
             // LDAP settings
             'ldap.ad_dc' => 'Primary Active Directory domain controller hostname or IP',
