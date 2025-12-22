@@ -32,11 +32,67 @@
             </div>
         </main>
 
+        <!-- Footer -->
         <footer class="bg-white border-t border-gray-200 mt-auto">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <p class="text-center text-sm text-gray-500">
-                    &copy; {{ new Date().getFullYear() }} ForceDesk. All rights reserved.
-                </p>
+            <div class="mt-4 sm:mt-8 py-4 sm:py-6 text-center text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800">
+                <div class="flex flex-col items-center px-3">
+                    <!-- Footer Links -->
+                    <div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mb-4 text-xs sm:text-sm">
+                        <Link
+                            href="/privacy-policy"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5"
+                        >
+                            <ShieldCheck class="w-3.5 h-3.5" />
+                            Privacy Policy
+                        </Link>
+                        <Dot class="w-3 h-3 text-gray-400 dark:text-gray-600" />
+                        <Link
+                            href="/terms-of-service"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5"
+                        >
+                            <FileText class="w-3.5 h-3.5" />
+                            Terms of Service
+                        </Link>
+                        <Dot class="w-3 h-3 text-gray-400 dark:text-gray-600" />
+                        <a
+                            href="https://docs.forcedesk.io"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5"
+                        >
+                            <BookOpen class="w-3.5 h-3.5" />
+                            Documentation
+                        </a>
+                        <Dot class="w-3 h-3 text-gray-400 dark:text-gray-600" />
+                        <a
+                            href="https://forcedesk.io/status"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5"
+                        >
+                            <Activity class="w-3.5 h-3.5" />
+                            Service Status
+                        </a>
+                        <Dot class="w-3 h-3 text-gray-400 dark:text-gray-600" />
+                        <a
+                            href="https://github.com/forcedesk/forcedesk/issues"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5"
+                        >
+                            <Bug class="w-3.5 h-3.5" />
+                            Report a Bug
+                        </a>
+                    </div>
+
+                    <!-- Powered By -->
+                    <span class="text-xs mb-1">Powered by</span>
+                    <a href="https://www.forcedesk.io" target="_blank" rel="nofollow" class="mb-2">
+                        <img v-if="isDark" src="https://cdn.forcedesk.io/img/forcedesk-light-test.svg" alt="ForceDesk" class="h-5 sm:h-6" />
+                        <img v-else src="https://cdn.forcedesk.io/img/forcedesk-footer-test.svg" alt="ForceDesk" class="h-5 sm:h-6" />
+                    </a>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">Copyright &copy; ForcePoint Software</span>
+                </div>
             </div>
         </footer>
 
@@ -55,12 +111,23 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
-import { LogOut } from 'lucide-vue-next';
+import { ref, computed, onMounted } from 'vue';
+import { router, Link } from '@inertiajs/vue3';
+import { LogOut, ShieldCheck, FileText, BookOpen, Activity, Bug, Dot } from 'lucide-vue-next';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 
 const showLogoutDialog = ref(false);
+const isDark = ref(false);
+
+// Detect dark mode
+onMounted(() => {
+    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    isDark.value = darkModeMediaQuery.matches;
+
+    darkModeMediaQuery.addEventListener('change', (e) => {
+        isDark.value = e.matches;
+    });
+});
 
 function handleLogout() {
     showLogoutDialog.value = true;

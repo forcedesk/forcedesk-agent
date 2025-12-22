@@ -15,6 +15,15 @@ use App\Http\Controllers\AuthController;
 |
 */
 
+// Public routes
+Route::get('/privacy-policy', function () {
+    return inertia('PrivacyPolicy');
+})->name('privacy-policy');
+
+Route::get('/terms-of-service', function () {
+    return inertia('TermsOfService');
+})->name('terms-of-service');
+
 // Authentication routes
 Route::get('/login', [AuthController::class, 'showLogin'])->name('agent.login');
 Route::post('/login', [AuthController::class, 'login'])->name('agent.login.post');
