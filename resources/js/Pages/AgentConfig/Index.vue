@@ -180,12 +180,22 @@
                         </button>
                     </div>
 
-                    <div v-if="logFileName" class="mb-2 text-sm text-gray-500">
-                        Showing: {{ logFileName }}
+                    <div class="mb-2 flex items-center gap-2">
+                        <span v-if="logFileName" class="text-sm text-gray-500">
+                            Showing: {{ logFileName }}
+                        </span>
+                        <Loader2
+                            v-if="loadingLogs"
+                            class="h-4 w-4 text-indigo-600 animate-spin"
+                        />
+                        <span v-if="!loadingLogs" class="text-xs text-green-600">● Live</span>
                     </div>
 
                     <div class="bg-gray-900 rounded-lg p-4 overflow-auto" style="max-height: 600px;">
-                        <pre class="text-xs text-green-400 font-mono whitespace-pre-wrap">{{ logContent || 'No logs to display' }}</pre>
+                        <div v-if="loadingLogs && !logContent" class="flex items-center justify-center py-12">
+                            <Loader2 class="h-8 w-8 text-green-400 animate-spin" />
+                        </div>
+                        <pre v-else class="text-xs text-green-400 font-mono whitespace-pre-wrap">{{ logContent || 'No logs to display' }}</pre>
                     </div>
                 </div>
             </div>
@@ -194,7 +204,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import {
@@ -204,7 +214,8 @@ import {
     Printer,
     Network,
     GraduationCap,
-    Users
+    Users,
+    Loader2
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -229,6 +240,7 @@ const loadingLogs = ref(false);
 const logContent = ref('');
 const logFileName = ref('');
 const logSearch = ref('');
+let logPollingInterval = null;
 
 // Map group names to icons
 const groupIcons = {
@@ -384,8 +396,10 @@ async function testConnection() {
     }
 }
 
-async function fetchLogs() {
-    loadingLogs.value = true;
+async function fetchLogs(silent = false) {
+    if (!silent) {
+        loadingLogs.value = true;
+    }
     error.value = '';
 
     try {
@@ -407,26 +421,56 @@ async function fetchLogs() {
             logContent.value = data.content;
             logFileName.value = data.file;
         } else {
-            error.value = 'Failed to fetch logs';
+            if (!silent) {
+                error.value = 'Failed to fetch logs';
+            }
         }
     } catch (err) {
-        error.value = 'An error occurred while fetching logs';
+        if (!silent) {
+            error.value = 'An error occurred while fetching logs';
+        }
     } finally {
         loadingLogs.value = false;
     }
 }
 
-// Watch for tab changes and fetch logs when Logs tab is activated
+function startLogPolling() {
+    // Clear any existing interval
+    stopLogPolling();
+
+    // Start polling every 3 seconds
+    logPollingInterval = setInterval(() => {
+        fetchLogs(true); // Silent fetch for polling
+    }, 3000);
+}
+
+function stopLogPolling() {
+    if (logPollingInterval) {
+        clearInterval(logPollingInterval);
+        logPollingInterval = null;
+    }
+}
+
+// Watch for tab changes and start/stop polling
 watch(activeTab, (newTab) => {
-    if (newTab === 'logs' && !logContent.value) {
+    if (newTab === 'logs') {
         fetchLogs();
+        startLogPolling();
+    } else {
+        stopLogPolling();
     }
 });
 
-// Fetch logs on mount if on logs tab
+// Start polling on mount if on logs tab
 onMounted(() => {
     if (activeTab.value === 'logs') {
         fetchLogs();
+        startLogPolling();
     }
+});
+
+// Clean up polling on unmount
+onUnmounted(() => {
+    stopLogPolling();
 });
 </script>
