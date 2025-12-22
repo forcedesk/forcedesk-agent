@@ -135,38 +135,36 @@
                                 class="h-5 w-5 text-gray-400"
                             />
                         </button>
-                        <div v-show="expandedSections[groupName]" class="space-y-4">
+                        <div v-show="expandedSections[groupName]" class="space-y-6">
                             <div
                                 v-for="setting in groupSettings"
                                 :key="setting.id"
-                                class="grid grid-cols-1 gap-4 sm:grid-cols-3"
                             >
-                                <div class="sm:col-span-1">
-                                    <label :for="`setting-${setting.id}`" class="block text-sm font-medium text-gray-300">
-                                        {{ setting.label || formatKey(setting.key) }}
-                                        <span v-if="setting.is_sensitive" class="text-red-400 ml-1">*</span>
-                                    </label>
-                                    <p v-if="setting.description" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {{ setting.description }}
-                                    </p>
-                                </div>
-                                <div class="sm:col-span-2">
-                                    <input
-                                        v-if="setting.type === 'boolean'"
-                                        :id="`setting-${setting.id}`"
-                                        type="checkbox"
-                                        v-model="setting.actual_value"
-                                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-600 rounded bg-gray-700"
-                                    />
-                                    <input
-                                        v-else
-                                        :id="`setting-${setting.id}`"
-                                        :type="setting.is_sensitive ? 'password' : 'text'"
-                                        v-model="setting.actual_value"
-                                        :placeholder="setting.is_sensitive ? '********' : 'Enter value'"
-                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400"
-                                    />
-                                </div>
+                                <Checkbox
+                                    v-if="setting.type === 'boolean'"
+                                    v-model="setting.actual_value"
+                                    :label="setting.label || formatKey(setting.key)"
+                                    :description="setting.description"
+                                    :required="setting.is_sensitive"
+                                />
+                                <TextArea
+                                    v-else-if="setting.type === 'json'"
+                                    v-model="setting.actual_value"
+                                    :label="setting.label || formatKey(setting.key)"
+                                    :description="setting.description"
+                                    :placeholder="setting.is_sensitive ? '********' : 'Enter JSON value'"
+                                    :rows="4"
+                                    :required="setting.is_sensitive"
+                                />
+                                <TextInput
+                                    v-else
+                                    v-model="setting.actual_value"
+                                    :label="setting.label || formatKey(setting.key)"
+                                    :description="setting.description"
+                                    :type="setting.is_sensitive ? 'password' : 'text'"
+                                    :placeholder="setting.is_sensitive ? '********' : 'Enter value'"
+                                    :required="setting.is_sensitive"
+                                />
                             </div>
                         </div>
                     </div>
@@ -174,36 +172,38 @@
 
                 <!-- Logs Tab -->
                 <div v-if="activeTab === 'logs'" class="px-4 py-5 sm:p-6">
-                    <div class="mb-4 flex gap-2 flex-wrap">
-                        <input
-                            v-model="logSearch"
-                            @keyup.enter="fetchLogs"
-                            type="text"
-                            placeholder="Search logs..."
-                            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400"
-                        />
-                        <button
-                            @click="fetchLogs"
-                            :disabled="loadingLogs"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                        >
-                            <Search class="h-4 w-4" />
-                            {{ loadingLogs ? 'Loading...' : 'Search' }}
-                        </button>
-                        <button
-                            @click="logSearch = ''; fetchLogs()"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                            <X class="h-4 w-4" />
-                            Clear
-                        </button>
-                        <a
-                            href="/agent-settings/logs/download"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                            <Download class="h-4 w-4" />
-                            Download Entire Log
-                        </a>
+                    <div class="mb-4 grid grid-cols-1 gap-4">
+                        <div @keyup.enter="fetchLogs">
+                            <TextInput
+                                v-model="logSearch"
+                                placeholder="Search logs..."
+                                label="Search Logs"
+                            />
+                        </div>
+                        <div class="flex gap-2 flex-wrap">
+                            <button
+                                @click="fetchLogs"
+                                :disabled="loadingLogs"
+                                class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            >
+                                <Search class="h-4 w-4" />
+                                {{ loadingLogs ? 'Loading...' : 'Search' }}
+                            </button>
+                            <button
+                                @click="logSearch = ''; fetchLogs()"
+                                class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                <X class="h-4 w-4" />
+                                Clear
+                            </button>
+                            <a
+                                href="/agent-settings/logs/download"
+                                class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                <Download class="h-4 w-4" />
+                                Download Entire Log
+                            </a>
+                        </div>
                     </div>
 
                     <div class="mb-2 flex items-center gap-2">
@@ -233,6 +233,9 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TextInput from '@/Components/Forms/TextInput.vue';
+import Checkbox from '@/Components/Forms/Checkbox.vue';
+import TextArea from '@/Components/Forms/TextArea.vue';
 import {
     Cloud,
     HardDrive,
