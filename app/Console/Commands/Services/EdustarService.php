@@ -65,19 +65,19 @@ class EdustarService extends Command
         $accounts = [];
         $payload = [];
 
-        if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_school_code'))) {
+        if (empty(agent_config('emc.emc_username')) || empty(agent_config('emc.emc_password')) || empty(agent_config('emc.emc_school_code'))) {
             return false;
         }
 
         // The URL of the EduSTAR MC API endpoint.
-        $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/'.config('agentconfig.emc.emc_school_code').'/FULL';
+        $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/'.agent_config('emc.emc_school_code').'/FULL';
 
         try {
             $client = new Client();
             $response = $client->get($url, [
                 'auth' => [
-                    config('agentconfig.emc.emc_username'),
-                    config('agentconfig.emc.emc_password'),
+                    agent_config('emc.emc_username'),
+                    agent_config('emc.emc_password'),
                 ],
             ]);
 
@@ -109,7 +109,7 @@ class EdustarService extends Command
                 } else {
 
                     try {
-                        Http::withBasicAuth(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'))->retry(5, 100)->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', ['schoolId' => config('agentconfig.emc.emc_school_code'), 'dn' => $data['ldap_dn'], 'newPass' => $genpassword]);
+                        Http::withBasicAuth(agent_config('emc.emc_username'), agent_config('emc.emc_password'))->retry(5, 100)->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', ['schoolId' => agent_config('emc.emc_school_code'), 'dn' => $data['ldap_dn'], 'newPass' => $genpassword]);
                     } catch (ConnectionException) {
                         \Log::error('Could not reset student password for '.$item->_login);
                     }
@@ -151,15 +151,15 @@ class EdustarService extends Command
         try {
 
             $sdclient = new Client(['verify' => false, 'headers' => array(
-                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                 'x-forcedesk-agentversion' => config('app.agent_version'),
             )]);
 
-            $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/edustar-data');
+            $this->info('Posting Data to '.agent_config('tenant.tenant_url') . '/api/agent/ingest/edustar-data');
 
-            $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/edustar-data', [
+            $response = $sdclient->post(agent_config('tenant.tenant_url') . '/api/agent/ingest/edustar-data', [
                 'headers' => [],
                 'body' => json_encode($payload),
             ]);

@@ -48,13 +48,13 @@ class KioskService extends Command
         }
 
         $client = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+            'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
-            'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
             'x-forcedesk-agentversion' => config('app.agent_version'),
         )]);
 
-        $request = $client->get(config('agentconfig.tenant.tenant_url') . '/api/agent/kiosk/payloads');
+        $request = $client->get(agent_config('tenant.tenant_url') . '/api/agent/kiosk/payloads');
 
         $response = $request->getBody()->getContents();
         $data = json_decode($response, false);
@@ -75,16 +75,16 @@ class KioskService extends Command
             ];
 
             try {
-                $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset');
+                $this->info('Posting Data to '.agent_config('tenant.tenant_url') . '/api/agent/ingest/passwordreset');
 
                 $sdclient = new Client(['verify' => false, 'headers' => array(
-                    'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                    'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                     'Content-Type' => 'application/json',
-                    'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                    'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                     'x-forcedesk-agentversion' => config('app.agent_version'),
                 )]);
 
-                $srvresponse = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/passwordreset', [
+                $srvresponse = $sdclient->post(agent_config('tenant.tenant_url') . '/api/agent/ingest/passwordreset', [
                     'headers' => [],
                     'body' => json_encode($payload),
                 ]);

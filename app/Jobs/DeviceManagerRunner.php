@@ -70,7 +70,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
     protected function getCiscoCommand($device, $passwordFileUri): string
     {
         $baseCommand = "sshpass -f $passwordFileUri ssh -p {$device->port} ";
-        $legacyCommand = config('agentconfig.device_manager.legacycommand');
+        $legacyCommand = agent_config('device_manager.legacycommand');
         $options = $device->is_cisco_legacy ? "$legacyCommand {$device->device_username}@{$device->hostname} 'show running-config view full'"
             : "-o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1 {$device->device_username}@{$device->hostname} 'show running-config view full'";
 
@@ -89,13 +89,13 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
     protected function sendBackup($device, $configData): void
     {
         $client = new Client([
-            'verify' => config('agentconfig.tenant.verify_ssl', true),
+            'verify' => agent_config('tenant.verify_ssl', true),
             'timeout' => 30,
             'connect_timeout' => 10,
             'headers' => array(
-                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                 'x-forcedesk-agentversion' => config('app.agent_version'),
             )
         ]);
@@ -112,7 +112,7 @@ class DeviceManagerRunner implements ShouldBeEncrypted, ShouldQueue
         ];
 
         try {
-            $response = $client->post(config('agentconfig.tenant.tenant_url') . '/api/agent/devicemanager/response', [
+            $response = $client->post(agent_config('tenant.tenant_url') . '/api/agent/devicemanager/response', [
                 'headers' => [],
                 'body' => json_encode($payload),
             ]);

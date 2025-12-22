@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class ProxyMiddleware
+class AgentAuth
 {
     /**
      * Handle an incoming request.
@@ -15,13 +15,12 @@ class ProxyMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-
-        /*
-        if (config()->has('agentconfig.proxies.address') && agent_config('proxies.address') !== null) {
-            config(['http.proxy' => agent_config('proxies.address')]);
-            config(['https.proxy' => agent_config('proxies.address')]);
+        if (!session()->has('agent_authenticated')) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated'], 401);
+            }
+            return redirect()->route('agent.login');
         }
-        */
 
         return $next($request);
     }

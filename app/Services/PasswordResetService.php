@@ -131,7 +131,7 @@ class PasswordResetService extends Controller
         // Check if there is an Edupass Account.
         $edupassacct = EdupassAccounts::where('login', $username)->first();
 
-        $group = StudentGroup::find(config('agentconfig.ldap.student_scope'));
+        $group = StudentGroup::find(agent_config('ldap.student_scope'));
 
         if ($studentuser && $studentuser->groups()->exists($group)) {
 
@@ -183,7 +183,7 @@ class PasswordResetService extends Controller
             }
         } elseif ($edupassacct) {
 
-            if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_school_code')) || empty(config('agentconfig.emc.emc_url'))) {
+            if (empty(agent_config('emc.emc_username')) || empty(agent_config('emc.emc_password')) || empty(agent_config('emc.emc_school_code')) || empty(agent_config('emc.emc_url'))) {
 
                 return [
                     'action' => 'declined',
@@ -205,10 +205,10 @@ class PasswordResetService extends Controller
 
                 $emcpassword = ucwords(self::rp1()).'.'.rand(1000, 9999);
 
-                $response = Http::withBasicAuth(config('agentconfig.emc.emc_username'), config('agentconfig.emc.emc_password'))
+                $response = Http::withBasicAuth(agent_config('emc.emc_username'), agent_config('emc.emc_password'))
                     ->retry(5, 100)
-                    ->post(config('agentconfig.emc.emc_url'), [
-                        'schoolId' => config('agentconfig.emc.emc_school_code'),
+                    ->post(agent_config('emc.emc_url'), [
+                        'schoolId' => agent_config('emc.emc_school_code'),
                         'dn' => $edupassacct->ldap_dn,
                         'newPass' => $emcpassword,
                     ]);

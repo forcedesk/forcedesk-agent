@@ -25,10 +25,10 @@ class UserSyncService extends Command
     {
 
         // Call Artisan to import Staff via the defined LDAP Scope.
-        \Artisan::call('ldap:import staff --filter="(memberof='.config('agentconfig.ldap.staff_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
+        \Artisan::call('ldap:import staff --filter="(memberof='.agent_config('ldap.staff_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
 
         // Call Artisan to import Students via the defined LDAP Scope.
-        \Artisan::call('ldap:import students --filter="(memberof='.config('agentconfig.ldap.student_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
+        \Artisan::call('ldap:import students --filter="(memberof='.agent_config('ldap.student_scope').')" -n --delete --restore --delete-missing --no-log --quiet');
 
         return true;
 

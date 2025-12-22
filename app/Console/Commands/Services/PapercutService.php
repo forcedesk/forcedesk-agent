@@ -38,14 +38,14 @@ class PapercutService extends Command
         }
 
         $sdclient = new Client(['verify' => false, 'headers' => array(
-            'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+            'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
             'Content-Type' => 'application/json',
-            'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+            'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
             'x-forcedesk-agentversion' => config('app.agent_version'),
         )]);
 
-        $api_key = config('agentconfig.papercut.api_key');
-        $api_url = config('agentconfig.papercut.api_url');
+        $api_key = agent_config('papercut.api_key');
+        $api_url = agent_config('papercut.api_url');
 
         $students = EdupassAccounts::whereNotNull('login')->orderby('login','asc')->get();
         $staff = User::whereNotNull('staff_code')->orderby('staff_code','asc')->get();
@@ -242,7 +242,7 @@ class PapercutService extends Command
 
         try {
 
-            $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/papercut-data', [
+            $response = $sdclient->post(agent_config('tenant.tenant_url') . '/api/agent/ingest/papercut-data', [
                 'headers' => [],
                 'body' => json_encode($payload),
             ]);

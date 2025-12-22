@@ -57,19 +57,19 @@ class CrtAccountsService extends Command
         $accounts = [];
         $payload = [];
 
-        if (empty(config('agentconfig.emc.emc_username')) || empty(config('agentconfig.emc.emc_password')) || empty(config('agentconfig.emc.emc_school_code'))) {
+        if (empty(agent_config('emc.emc_username')) || empty(agent_config('emc.emc_password')) || empty(agent_config('emc.emc_school_code'))) {
             return false;
         }
 
         // The URL of the EduSTAR MC API endpoint.
-        $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetGroupMembers?schoolId='.config('agentconfig.emc.emc_school_code').'&groupDn='.config('agentconfig.emc.emc_crt_group_dn').'&'.'&groupName='.config('agentconfig.emc.emc_crt_group_name');
+        $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetGroupMembers?schoolId='.agent_config('emc.emc_school_code').'&groupDn='.agent_config('emc.emc_crt_group_dn').'&'.'&groupName='.agent_config('emc.emc_crt_group_name');
 
         try {
             $client = new Client();
             $response = $client->get($url, [
                 'auth' => [
-                    config('agentconfig.emc.emc_username'),
-                    config('agentconfig.emc.emc_password'),
+                    agent_config('emc.emc_username'),
+                    agent_config('emc.emc_password'),
                 ],
             ]);
 
@@ -124,15 +124,15 @@ class CrtAccountsService extends Command
         try {
 
             $sdclient = new Client(['verify' => false, 'headers' => array(
-                'Authorization' => 'Bearer ' . config('agentconfig.tenant.tenant_api_key'),
+                'Authorization' => 'Bearer ' . agent_config('tenant.tenant_api_key'),
                 'Content-Type' => 'application/json',
-                'x-forcedesk-agent' => config('agentconfig.tenant.tenant_uuid'),
+                'x-forcedesk-agent' => agent_config('tenant.tenant_uuid'),
                 'x-forcedesk-agentversion' => config('app.agent_version'),
             )]);
 
-            $this->info('Posting Data to '.config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/crtaccount-data');
+            $this->info('Posting Data to '.agent_config('tenant.tenant_url') . '/api/agent/ingest/crtaccount-data');
 
-            $response = $sdclient->post(config('agentconfig.tenant.tenant_url') . '/api/agent/ingest/crtaccount-data', [
+            $response = $sdclient->post(agent_config('tenant.tenant_url') . '/api/agent/ingest/crtaccount-data', [
                 'headers' => [],
                 'body' => json_encode($payload),
             ]);
