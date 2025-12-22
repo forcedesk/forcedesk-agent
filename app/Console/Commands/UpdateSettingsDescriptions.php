@@ -15,11 +15,11 @@ class UpdateSettingsDescriptions extends Command
         $settings = [
             // Tenant settings
             'tenant.tenant_url' => [
-                'label' => 'Tenant URL',
-                'description' => 'The URL of your ForceDesk tenant (e.g., https://your-tenant.forcedesk.io)',
+                'label' => 'ForceDesk Instance URL',
+                'description' => 'The URL of your ForceDesk Tenant (e.g., https://your-tenant.forcedesk.io)',
             ],
             'tenant.tenant_api_key' => [
-                'label' => 'API Key',
+                'label' => 'Agent API Key',
                 'description' => 'API key for authenticating with the ForceDesk tenant',
             ],
             'tenant.tenant_uuid' => [
@@ -34,7 +34,7 @@ class UpdateSettingsDescriptions extends Command
             // Device Manager settings
             'device_manager.legacycommand' => [
                 'label' => 'Legacy Command',
-                'description' => 'Legacy SSH command options for older Cisco devices',
+                'description' => 'For Device Manager devices that use older SSH ciphers or methods.',
             ],
 
             // Logging settings
@@ -45,8 +45,8 @@ class UpdateSettingsDescriptions extends Command
 
             // PaperCut settings
             'papercut.api_url' => [
-                'label' => 'PaperCut Server URL',
-                'description' => 'Your PaperCut server API URL (e.g., http://papercut-server:9191/api)',
+                'label' => 'Papercut Server URL',
+                'description' => 'Your Papercut server API URL (e.g., http://papercut-server:9191/api)',
             ],
             'papercut.api_key' => [
                 'label' => 'PaperCut API Key',
@@ -66,27 +66,27 @@ class UpdateSettingsDescriptions extends Command
             // EMC/Edustar settings
             'emc.emc_url' => [
                 'label' => 'EduSTAR MC URL',
-                'description' => 'Edustar Management Console API endpoint URL',
+                'description' => 'EduSTAR MC URL for Polling Student Data',
             ],
             'emc.emc_username' => [
                 'label' => 'Username',
-                'description' => 'Username for Edustar MC authentication',
+                'description' => 'The username to use when authenticating with EduSTAR MC',
             ],
             'emc.emc_password' => [
                 'label' => 'Password',
-                'description' => 'Password for Edustar MC authentication',
+                'description' => 'The Password to use when authenticating with EduSTAR MC',
             ],
             'emc.emc_school_code' => [
                 'label' => 'School Code',
-                'description' => 'Your school code in the Edustar system',
+                'description' => 'Your School Code (EG: 8185)',
             ],
             'emc.emc_crt_group_dn' => [
                 'label' => 'CRT Group DN',
-                'description' => 'Distinguished Name of the CRT group in Active Directory',
+                'description' => 'Full Distinguished Name of the CRT Group',
             ],
             'emc.emc_crt_group_name' => [
                 'label' => 'CRT Group Name',
-                'description' => 'Name of the CRT group for student accounts',
+                'description' => 'Name of the CRT Group',
             ],
 
             // LDAP settings
