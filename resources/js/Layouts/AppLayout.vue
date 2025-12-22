@@ -10,7 +10,7 @@
                             class="h-8 w-8"
                         />
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-                            Agent Configuration
+                            ForceDeskAgent Configuration
                         </h1>
                     </div>
                     <div class="flex items-center">

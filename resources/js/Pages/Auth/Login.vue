@@ -93,13 +93,6 @@
                             </button>
                         </div>
                     </form>
-
-                    <!-- Additional Info -->
-                    <div class="mt-6 text-center">
-                        <p class="text-xs text-gray-400">
-                            Secured access to agent configuration
-                        </p>
-                    </div>
                 </div>
             </div>
 
