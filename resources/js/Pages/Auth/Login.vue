@@ -1,75 +1,114 @@
 <template>
-    <div class="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-md w-full space-y-8">
-            <div class="text-center">
-                <img
-                    src="https://cdn.forcedesk.io/img/forcedesk-icon-test.svg"
-                    alt="ForceDesk Logo"
-                    class="mx-auto h-16 w-16 mb-4"
-                />
-                <h2 class="mt-2 text-3xl font-extrabold text-gray-900">
-                    ForceDesk Agent
-                </h2>
-                <p class="mt-2 text-sm text-gray-600">
-                    Configuration Panel
+    <div class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full">
+            <!-- Login Card -->
+            <div class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                <!-- Header with gradient -->
+                <div class="bg-gradient-to-r from-indigo-600 to-blue-600 px-8 pt-8 pb-6">
+                    <div class="text-center">
+                        <div class="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl shadow-lg mb-4">
+                            <img
+                                src="https://cdn.forcedesk.io/img/forcedesk-icon-test.svg"
+                                alt="ForceDesk Logo"
+                                class="h-12 w-12"
+                            />
+                        </div>
+                        <h2 class="text-3xl font-bold text-white">
+                            ForceDesk Agent
+                        </h2>
+                        <p class="mt-2 text-sm text-indigo-100">
+                            Configuration Panel
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Form Section -->
+                <div class="px-8 py-8">
+                    <form @submit.prevent="handleLogin" class="space-y-6">
+                        <!-- Password Input with Icon -->
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                                Admin Password
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Lock class="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    id="password"
+                                    v-model="form.password"
+                                    type="password"
+                                    required
+                                    :class="[
+                                        'block w-full pl-10 pr-10 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors',
+                                        errors.password
+                                            ? 'border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 bg-red-50'
+                                            : 'border-gray-300 placeholder-gray-400 focus:border-indigo-500'
+                                    ]"
+                                    placeholder="Enter your password"
+                                    autocomplete="current-password"
+                                />
+                                <div v-if="errors.password" class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                    <AlertCircle class="h-5 w-5 text-red-500" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Error Message with Animation -->
+                        <transition
+                            enter-active-class="transition ease-out duration-200"
+                            enter-from-class="opacity-0 transform scale-95"
+                            enter-to-class="opacity-100 transform scale-100"
+                            leave-active-class="transition ease-in duration-150"
+                            leave-from-class="opacity-100 transform scale-100"
+                            leave-to-class="opacity-0 transform scale-95"
+                        >
+                            <div v-if="errors.password" class="rounded-lg bg-red-50 border border-red-200 p-4">
+                                <div class="flex items-start">
+                                    <div class="flex-shrink-0">
+                                        <AlertTriangle class="h-5 w-5 text-red-400" />
+                                    </div>
+                                    <div class="ml-3">
+                                        <h3 class="text-sm font-medium text-red-800">
+                                            Authentication Failed
+                                        </h3>
+                                        <p class="mt-1 text-sm text-red-700">
+                                            {{ errors.password }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </transition>
+
+                        <!-- Submit Button -->
+                        <div>
+                            <button
+                                type="submit"
+                                :disabled="loading"
+                                class="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+                            >
+                                <Loader2 v-if="loading" class="h-5 w-5 animate-spin" />
+                                <LogIn v-else class="h-5 w-5" />
+                                {{ loading ? 'Signing in...' : 'Sign in' }}
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Additional Info -->
+                    <div class="mt-6 text-center">
+                        <p class="text-xs text-gray-500">
+                            Secured access to agent configuration
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-8 text-center">
+                <p class="text-sm text-gray-600">
+                    Powered by <span class="font-semibold text-indigo-600">ForceDesk</span>
                 </p>
             </div>
-            <form class="mt-8 space-y-6" @submit.prevent="handleLogin">
-                <div class="rounded-md shadow-sm">
-                    <div>
-                        <label for="password" class="sr-only">Admin Password</label>
-                        <input
-                            id="password"
-                            v-model="form.password"
-                            type="password"
-                            required
-                            class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                            placeholder="Admin Password"
-                            autocomplete="current-password"
-                        />
-                    </div>
-                </div>
-
-                <div v-if="errors.password" class="rounded-md bg-red-50 p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <p class="text-sm font-medium text-red-800">
-                                {{ errors.password }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <button
-                        type="submit"
-                        :disabled="loading"
-                        class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                    >
-                        <span class="absolute left-0 inset-y-0 flex items-center pl-3">
-                            <svg
-                                class="h-5 w-5 text-indigo-500 group-hover:text-indigo-400"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    fill-rule="evenodd"
-                                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                                    clip-rule="evenodd"
-                                />
-                            </svg>
-                        </span>
-                        {{ loading ? 'Signing in...' : 'Sign in' }}
-                    </button>
-                </div>
-            </form>
         </div>
     </div>
 </template>
@@ -77,6 +116,7 @@
 <script setup>
 import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { Lock, LogIn, Loader2, AlertCircle, AlertTriangle } from 'lucide-vue-next';
 
 const props = defineProps({
     errors: {
