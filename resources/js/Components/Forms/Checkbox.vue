@@ -1,6 +1,6 @@
 <template>
-    <div class="flex items-start">
-        <div class="flex items-center h-5">
+    <div class="flex items-start py-2">
+        <div class="flex items-center h-6 pt-1">
             <input
                 :id="id"
                 type="checkbox"
@@ -9,21 +9,21 @@
                 :disabled="disabled"
                 :required="required"
                 :class="[
-                    'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-600 rounded bg-gray-700',
+                    'h-5 w-5 text-indigo-600 focus:ring-indigo-500 focus:ring-2 border-gray-600 rounded bg-gray-700',
                     disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
                     inputClass
                 ]"
             />
         </div>
-        <div class="ml-3">
+        <div class="ml-4">
             <label v-if="label" :for="id" :class="[
-                'text-sm font-medium text-gray-300',
+                'text-base font-medium text-gray-300',
                 disabled ? 'opacity-50' : 'cursor-pointer'
             ]">
                 {{ label }}
                 <span v-if="required" class="text-red-400 ml-1">*</span>
             </label>
-            <p v-if="description" class="text-xs text-gray-500 dark:text-gray-400">
+            <p v-if="description" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {{ description }}
             </p>
             <p v-if="error" class="mt-1 text-xs text-red-400">{{ error }}</p>

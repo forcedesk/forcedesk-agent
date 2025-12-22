@@ -1,10 +1,10 @@
 <template>
     <div>
-        <label v-if="label" :for="id" class="block text-sm font-medium text-gray-300">
+        <label v-if="label" :for="id" class="block text-base font-medium text-gray-300 mb-2">
             {{ label }}
             <span v-if="required" class="text-red-400 ml-1">*</span>
         </label>
-        <p v-if="description" class="mt-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
+        <p v-if="description" class="mt-1 text-sm text-gray-500 dark:text-gray-400 mb-2">
             {{ description }}
         </p>
         <input
@@ -18,7 +18,7 @@
             :readonly="readonly"
             :autocomplete="autocomplete"
             :class="[
-                'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400',
+                'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full px-4 py-3 text-base border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400',
                 error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : '',
                 disabled ? 'opacity-50 cursor-not-allowed' : '',
                 inputClass
