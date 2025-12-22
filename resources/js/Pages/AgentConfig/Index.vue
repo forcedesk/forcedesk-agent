@@ -57,27 +57,31 @@
                         <button
                             @click="testConnection"
                             :disabled="testing"
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
+                            <Zap class="h-4 w-4" />
                             {{ testing ? 'Testing...' : 'Test Connectivity' }}
                         </button>
                         <button
                             @click="importFromConfig"
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
+                            <Download class="h-4 w-4" />
                             Import from Config
                         </button>
                         <button
                             @click="exportToConfig"
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
+                            <Upload class="h-4 w-4" />
                             Export to Config File
                         </button>
                         <button
                             @click="saveAllSettings"
                             :disabled="saving"
-                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
+                            <Save class="h-4 w-4" />
                             {{ saving ? 'Saving...' : 'Save All Changes' }}
                         </button>
                     </div>
@@ -112,13 +116,26 @@
                     </div>
 
                     <div v-for="(groupSettings, groupName) in localSettings" :key="groupName" class="mb-8">
-                        <div class="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
-                            <component :is="getGroupIcon(groupName)" class="h-5 w-5 text-indigo-600" />
-                            <h4 class="text-md font-semibold text-gray-900">
-                                {{ formatGroupName(groupName) }} Settings
-                            </h4>
-                        </div>
-                        <div class="space-y-4">
+                        <button
+                            @click="toggleSection(groupName)"
+                            class="w-full flex items-center justify-between gap-2 mb-4 pb-2 border-b border-gray-200 hover:border-indigo-300 transition-colors cursor-pointer"
+                        >
+                            <div class="flex items-center gap-2">
+                                <component :is="getGroupIcon(groupName)" class="h-5 w-5 text-indigo-600" />
+                                <h4 class="text-md font-semibold text-gray-900">
+                                    {{ formatGroupName(groupName) }} Settings
+                                </h4>
+                            </div>
+                            <ChevronDown
+                                v-if="expandedSections[groupName]"
+                                class="h-5 w-5 text-gray-500"
+                            />
+                            <ChevronUp
+                                v-else
+                                class="h-5 w-5 text-gray-500"
+                            />
+                        </button>
+                        <div v-show="expandedSections[groupName]" class="space-y-4">
                             <div
                                 v-for="setting in groupSettings"
                                 :key="setting.id"
@@ -168,14 +185,16 @@
                         <button
                             @click="fetchLogs"
                             :disabled="loadingLogs"
-                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
+                            <Search class="h-4 w-4" />
                             {{ loadingLogs ? 'Loading...' : 'Search' }}
                         </button>
                         <button
                             @click="logSearch = ''; fetchLogs()"
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
+                            <X class="h-4 w-4" />
                             Clear
                         </button>
                     </div>
@@ -217,7 +236,15 @@ import {
     Users,
     Loader2,
     Settings,
-    ScrollText
+    ScrollText,
+    ChevronDown,
+    ChevronUp,
+    Zap,
+    Download,
+    Upload,
+    Save,
+    Search,
+    X
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -244,6 +271,14 @@ const logFileName = ref('');
 const logSearch = ref('');
 let logPollingInterval = null;
 
+// Collapse/expand sections - all expanded by default
+const expandedSections = ref({});
+
+// Initialize all sections as expanded
+Object.keys(props.settings).forEach(groupName => {
+    expandedSections.value[groupName] = true;
+});
+
 // Map group names to icons
 const groupIcons = {
     tenant: Cloud,
@@ -267,6 +302,10 @@ function formatKey(key) {
     const parts = key.split('.');
     const lastPart = parts[parts.length - 1];
     return lastPart.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function toggleSection(groupName) {
+    expandedSections.value[groupName] = !expandedSections.value[groupName];
 }
 
 async function saveAllSettings() {

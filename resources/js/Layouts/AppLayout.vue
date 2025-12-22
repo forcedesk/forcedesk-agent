@@ -39,16 +39,35 @@
                 </p>
             </div>
         </footer>
+
+        <!-- Logout Confirmation Dialog -->
+        <ConfirmDialog
+            :show="showLogoutDialog"
+            title="Confirm Logout"
+            message="Are you sure you want to logout?"
+            confirmText="Logout"
+            cancelText="Cancel"
+            type="danger"
+            @confirm="confirmLogout"
+            @cancel="showLogoutDialog = false"
+        />
     </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { LogOut } from 'lucide-vue-next';
+import ConfirmDialog from '@/Components/ConfirmDialog.vue';
+
+const showLogoutDialog = ref(false);
 
 function handleLogout() {
-    if (confirm('Are you sure you want to logout?')) {
-        router.post('/logout');
-    }
+    showLogoutDialog.value = true;
+}
+
+function confirmLogout() {
+    showLogoutDialog.value = false;
+    router.post('/logout');
 }
 </script>
