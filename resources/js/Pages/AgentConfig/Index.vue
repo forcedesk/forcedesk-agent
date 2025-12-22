@@ -11,34 +11,34 @@
                             Manage settings and view system logs.
                         </p>
                     </div>
-                </div>
 
-                <!-- Tab Navigation -->
-                <div class="mt-4 border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
+                    <!-- Tab Navigation in Header -->
+                    <div class="flex gap-2">
                         <button
                             @click="activeTab = 'settings'"
                             :class="[
                                 activeTab === 'settings'
-                                    ? 'border-indigo-500 text-indigo-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-                                'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-white text-gray-700 hover:bg-gray-50',
+                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                             ]"
                         >
+                            <Settings class="h-4 w-4" />
                             Settings
                         </button>
                         <button
                             @click="activeTab = 'logs'"
                             :class="[
                                 activeTab === 'logs'
-                                    ? 'border-indigo-500 text-indigo-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-                                'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-white text-gray-700 hover:bg-gray-50',
+                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                             ]"
                         >
+                            <ScrollText class="h-4 w-4" />
                             Logs
                         </button>
-                    </nav>
+                    </div>
                 </div>
             </div>
 
@@ -215,7 +215,9 @@ import {
     Network,
     GraduationCap,
     Users,
-    Loader2
+    Loader2,
+    Settings,
+    ScrollText
 } from 'lucide-vue-next';
 
 const props = defineProps({
