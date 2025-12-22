@@ -93,6 +93,7 @@ class AgentConfig
                 $fullKey = "{$group}.{$key}";
                 $type = self::detectType($value);
                 $isSensitive = self::isSensitiveKey($key);
+                $label = self::getFieldLabel($fullKey);
                 $description = self::getFieldDescription($fullKey);
 
                 // Only import if not already in database
@@ -103,6 +104,7 @@ class AgentConfig
                         'type' => $type,
                         'group' => $group,
                         'is_sensitive' => $isSensitive,
+                        'label' => $label,
                         'description' => $description,
                     ]);
                     $count++;
@@ -158,6 +160,52 @@ class AgentConfig
     }
 
     /**
+     * Get a short label for a field
+     */
+    protected static function getFieldLabel(string $key): ?string
+    {
+        $labels = [
+            // Tenant settings
+            'tenant.tenant_url' => 'Tenant URL',
+            'tenant.tenant_api_key' => 'API Key',
+            'tenant.tenant_uuid' => 'Agent UUID',
+            'tenant.verify_ssl' => 'Verify SSL',
+
+            // Device Manager settings
+            'device_manager.legacycommand' => 'Legacy Command',
+
+            // Logging settings
+            'logging.enabled' => 'Enable Logging',
+
+            // PaperCut settings
+            'papercut.api_url' => 'PaperCut Server URL',
+            'papercut.api_key' => 'PaperCut API Key',
+            'papercut.enabled' => 'Enable PaperCut',
+
+            // Proxy settings
+            'proxies.address' => 'Proxy Address',
+
+            // EMC/Edustar settings
+            'emc.emc_url' => 'EduSTAR MC URL',
+            'emc.emc_username' => 'Username',
+            'emc.emc_password' => 'Password',
+            'emc.emc_school_code' => 'School Code',
+            'emc.emc_crt_group_dn' => 'CRT Group DN',
+            'emc.emc_crt_group_name' => 'CRT Group Name',
+
+            // LDAP settings
+            'ldap.ad_dc' => 'Domain Controller',
+            'ldap.ad_svc_user_cn' => 'Service Account Username',
+            'ldap.ad_svc_password' => 'Service Account Password',
+            'ldap.ad_base_dn' => 'Base DN',
+            'ldap.staff_scope' => 'Staff Group DN',
+            'ldap.student_scope' => 'Student Group DN',
+        ];
+
+        return $labels[$key] ?? null;
+    }
+
+    /**
      * Get a descriptive label for a field
      */
     protected static function getFieldDescription(string $key): ?string
@@ -176,7 +224,7 @@ class AgentConfig
             'logging.enabled' => 'Enable or disable detailed logging for this agent',
 
             // PaperCut settings
-            'papercut.api_url' => 'PaperCut server API URL (e.g., http://papercut-server:9191/api)',
+            'papercut.api_url' => 'Your PaperCut server API URL (e.g., http://papercut-server:9191/api)',
             'papercut.api_key' => 'Authentication key for PaperCut API access',
             'papercut.enabled' => 'Enable or disable PaperCut integration',
 

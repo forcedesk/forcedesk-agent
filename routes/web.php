@@ -30,4 +30,5 @@ Route::middleware('agent.auth')->group(function () {
     Route::get('/agent-settings/export', [AgentSettingsController::class, 'exportConfig'])->name('agent-settings.export');
     Route::post('/agent-settings/clear-cache', [AgentSettingsController::class, 'clearCache'])->name('agent-settings.clear-cache');
     Route::post('/agent-settings/test-connection', [AgentSettingsController::class, 'testConnection'])->name('agent-settings.test-connection');
+    Route::get('/agent-settings/logs', [AgentSettingsController::class, 'getLogs'])->name('agent-settings.logs');
 });

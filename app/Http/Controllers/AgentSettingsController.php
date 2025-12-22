@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\AgentConnectivityHelper;
 use App\Helpers\AgentConfig;
 use App\Models\AgentSetting;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class AgentSettingsController extends Controller
                     'value' => $setting->is_sensitive ? '********' : $setting->value,
                     'actual_value' => $setting->value,
                     'type' => $setting->type,
+                    'label' => $setting->label,
                     'description' => $setting->description,
                     'is_sensitive' => $setting->is_sensitive,
                 ];
@@ -48,6 +50,7 @@ class AgentSettingsController extends Controller
                     'value' => $setting->is_sensitive ? '********' : $setting->value,
                     'actual_value' => $setting->value,
                     'type' => $setting->type,
+                    'label' => $setting->label,
                     'description' => $setting->description,
                     'is_sensitive' => $setting->is_sensitive,
                 ];
@@ -146,12 +149,143 @@ class AgentSettingsController extends Controller
      */
     public function testConnection()
     {
-        // You can implement connection testing logic here
-        // For example, test tenant connection, LDAP connection, etc.
+        $results = [];
+        $allPassed = true;
+
+        // Test tenant connectivity
+        try {
+            $tenantTest = AgentConnectivityHelper::testConnectivity();
+            $results[] = [
+                'name' => 'ForceDesk Tenant',
+                'status' => $tenantTest ? 'success' : 'failed',
+                'message' => $tenantTest ? 'Successfully connected to tenant' : 'Failed to connect to tenant',
+            ];
+            if (!$tenantTest) {
+                $allPassed = false;
+            }
+        } catch (\Exception $e) {
+            $results[] = [
+                'name' => 'ForceDesk Tenant',
+                'status' => 'error',
+                'message' => 'Error: ' . $e->getMessage(),
+            ];
+            $allPassed = false;
+        }
+
+        // Test LDAP connectivity if configured
+        $ldapConfigured = agent_config('ldap.ad_dc') !== null;
+        if ($ldapConfigured) {
+            try {
+                $ldapTest = AgentConnectivityHelper::testLdapConnectivity();
+                $results[] = [
+                    'name' => 'LDAP/Active Directory',
+                    'status' => $ldapTest ? 'success' : 'failed',
+                    'message' => $ldapTest ? 'Successfully connected to LDAP' : 'Failed to connect to LDAP',
+                ];
+                if (!$ldapTest) {
+                    $allPassed = false;
+                }
+            } catch (\Exception $e) {
+                $results[] = [
+                    'name' => 'LDAP/Active Directory',
+                    'status' => 'error',
+                    'message' => 'Error: ' . $e->getMessage(),
+                ];
+                $allPassed = false;
+            }
+        }
 
         return response()->json([
-            'message' => 'Connection test not yet implemented',
+            'success' => $allPassed,
+            'message' => $allPassed ? 'All connectivity tests passed' : 'Some connectivity tests failed',
+            'results' => $results,
         ]);
+    }
+
+    /**
+     * Get Laravel logs
+     */
+    public function getLogs(Request $request)
+    {
+        $logPath = storage_path('logs');
+        $search = $request->query('search', '');
+        $lines = $request->query('lines', 500);
+
+        // Find the most recent log file
+        $logFiles = glob($logPath . '/laravel*.log');
+        if (empty($logFiles)) {
+            return response()->json([
+                'content' => 'No log files found',
+                'file' => null,
+            ]);
+        }
+
+        // Sort by modified time, most recent first
+        usort($logFiles, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        $mostRecentLog = $logFiles[0];
+        $fileName = basename($mostRecentLog);
+
+        // Read the log file
+        if (!file_exists($mostRecentLog)) {
+            return response()->json([
+                'content' => 'Log file not found',
+                'file' => $fileName,
+            ]);
+        }
+
+        // Read the last N lines
+        $logContent = $this->readLastLines($mostRecentLog, $lines);
+
+        // Apply search filter if provided
+        if (!empty($search)) {
+            $logLines = explode("\n", $logContent);
+            $filteredLines = array_filter($logLines, function ($line) use ($search) {
+                return stripos($line, $search) !== false;
+            });
+            $logContent = implode("\n", $filteredLines);
+        }
+
+        return response()->json([
+            'content' => $logContent,
+            'file' => $fileName,
+        ]);
+    }
+
+    /**
+     * Read last N lines from a file
+     */
+    private function readLastLines($file, $lines)
+    {
+        $handle = fopen($file, 'r');
+        $linecounter = $lines;
+        $pos = -2;
+        $beginning = false;
+        $text = [];
+
+        while ($linecounter > 0) {
+            $t = ' ';
+            while ($t != "\n") {
+                if (fseek($handle, $pos, SEEK_END) == -1) {
+                    $beginning = true;
+                    break;
+                }
+                $t = fgetc($handle);
+                $pos--;
+            }
+            $linecounter--;
+            if ($beginning) {
+                rewind($handle);
+            }
+            $text[$lines - $linecounter - 1] = fgets($handle);
+            if ($beginning) {
+                break;
+            }
+        }
+        fclose($handle);
+        return implode('', array_reverse($text));
     }
 
     /**
