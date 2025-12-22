@@ -12,6 +12,7 @@ class AgentSetting extends Model
         'value',
         'type',
         'group',
+        'label',
         'description',
         'is_sensitive',
     ];
