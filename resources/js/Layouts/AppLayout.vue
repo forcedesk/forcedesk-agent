@@ -1,6 +1,6 @@
 <template>
-    <div class="min-h-screen bg-gray-100 flex flex-col">
-        <nav class="bg-white shadow">
+    <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col">
+        <nav class="bg-white dark:bg-gray-800 shadow-md dark:shadow-gray-900/50 border-b border-gray-200 dark:border-gray-700">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16">
                     <div class="flex items-center gap-3">
@@ -9,14 +9,14 @@
                             alt="ForceDesk Logo"
                             class="h-8 w-8"
                         />
-                        <h1 class="text-xl font-semibold text-gray-900">
+                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
                             Agent Configuration
                         </h1>
                     </div>
                     <div class="flex items-center">
                         <button
                             @click="handleLogout"
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:focus:ring-gray-400"
                         >
                             <LogOut class="h-4 w-4 mr-2" />
                             Logout
@@ -33,8 +33,8 @@
         </main>
 
         <!-- Footer -->
-        <footer class="bg-white border-t border-gray-200 mt-auto">
-            <div class="mt-4 sm:mt-8 py-4 sm:py-6 text-center text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800">
+        <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
+            <div class="mt-4 sm:mt-8 py-4 sm:py-6 text-center text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
                 <div class="flex flex-col items-center px-3">
                     <!-- Footer Links -->
                     <div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mb-4 text-xs sm:text-sm">

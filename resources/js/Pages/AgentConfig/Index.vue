@@ -1,13 +1,13 @@
 <template>
     <AppLayout>
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div class="px-4 py-5 sm:px-6">
+        <div class="bg-white dark:bg-gray-800 shadow-lg dark:shadow-gray-900/50 overflow-hidden sm:rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex justify-between items-center">
                     <div>
-                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
                             Agent Configuration
                         </h3>
-                        <p class="mt-1 max-w-2xl text-sm text-gray-500">
+                        <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
                             Manage settings and view system logs.
                         </p>
                     </div>
@@ -19,8 +19,8 @@
                             :class="[
                                 activeTab === 'settings'
                                     ? 'bg-indigo-600 text-white'
-                                    : 'bg-white text-gray-700 hover:bg-gray-50',
-                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                                    : 'bg-gray-700 text-gray-200 hover:bg-gray-600',
+                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                             ]"
                         >
                             <Settings class="h-4 w-4" />
@@ -31,8 +31,8 @@
                             :class="[
                                 activeTab === 'logs'
                                     ? 'bg-indigo-600 text-white'
-                                    : 'bg-white text-gray-700 hover:bg-gray-50',
-                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                                    : 'bg-gray-700 text-gray-200 hover:bg-gray-600',
+                                'inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                             ]"
                         >
                             <ScrollText class="h-4 w-4" />
@@ -42,36 +42,36 @@
                 </div>
             </div>
 
-            <div class="border-t border-gray-200">
-                <div v-if="message" class="px-4 py-3 bg-green-50 border-b border-green-200">
-                    <p class="text-sm text-green-800">{{ message }}</p>
+            <div class="border-t border-gray-200 dark:border-gray-700">
+                <div v-if="message" class="px-4 py-3 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
+                    <p class="text-sm text-green-800 dark:text-green-300">{{ message }}</p>
                 </div>
 
-                <div v-if="error" class="px-4 py-3 bg-red-50 border-b border-red-200">
-                    <p class="text-sm text-red-800">{{ error }}</p>
+                <div v-if="error" class="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+                    <p class="text-sm text-red-800 dark:text-red-300">{{ error }}</p>
                 </div>
 
                 <!-- Settings Tab -->
                 <div v-if="activeTab === 'settings'" class="px-4 py-5 sm:p-6">
-                    <div class="flex gap-2 mb-6">
+                    <div class="flex gap-2 mb-6 flex-wrap">
                         <button
                             @click="testConnection"
                             :disabled="testing"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
                             <Zap class="h-4 w-4" />
                             {{ testing ? 'Testing...' : 'Test Connectivity' }}
                         </button>
                         <button
                             @click="importFromConfig"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                             <Download class="h-4 w-4" />
                             Import from Config
                         </button>
                         <button
                             @click="exportToConfig"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                             <Upload class="h-4 w-4" />
                             Export to Config File
@@ -88,7 +88,7 @@
 
                     <!-- Test Results -->
                     <div v-if="testResults.length > 0" class="mb-6">
-                        <div class="rounded-md bg-blue-50 p-4">
+                        <div class="rounded-md bg-blue-900/20 border border-blue-700 p-4">
                             <div class="flex">
                                 <div class="flex-shrink-0">
                                     <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -96,8 +96,8 @@
                                     </svg>
                                 </div>
                                 <div class="ml-3 flex-1">
-                                    <h3 class="text-sm font-medium text-blue-800">Connectivity Test Results</h3>
-                                    <div class="mt-2 text-sm text-blue-700">
+                                    <h3 class="text-sm font-medium text-blue-300">Connectivity Test Results</h3>
+                                    <div class="mt-2 text-sm text-blue-200">
                                         <ul class="list-disc pl-5 space-y-1">
                                             <li v-for="result in testResults" :key="result.name">
                                                 <span class="font-medium">{{ result.name }}:</span>
@@ -118,21 +118,21 @@
                     <div v-for="(groupSettings, groupName) in localSettings" :key="groupName" class="mb-8">
                         <button
                             @click="toggleSection(groupName)"
-                            class="w-full flex items-center justify-between gap-2 mb-4 pb-2 border-b border-gray-200 hover:border-indigo-300 transition-colors cursor-pointer"
+                            class="w-full flex items-center justify-between gap-2 mb-4 pb-2 border-b border-gray-700 hover:border-indigo-500 transition-colors cursor-pointer"
                         >
                             <div class="flex items-center gap-2">
-                                <component :is="getGroupIcon(groupName)" class="h-5 w-5 text-indigo-600" />
-                                <h4 class="text-md font-semibold text-gray-900">
+                                <component :is="getGroupIcon(groupName)" class="h-5 w-5 text-indigo-400" />
+                                <h4 class="text-md font-semibold text-gray-100">
                                     {{ formatGroupName(groupName) }} Settings
                                 </h4>
                             </div>
                             <ChevronDown
                                 v-if="expandedSections[groupName]"
-                                class="h-5 w-5 text-gray-500"
+                                class="h-5 w-5 text-gray-400"
                             />
                             <ChevronUp
                                 v-else
-                                class="h-5 w-5 text-gray-500"
+                                class="h-5 w-5 text-gray-400"
                             />
                         </button>
                         <div v-show="expandedSections[groupName]" class="space-y-4">
@@ -142,11 +142,11 @@
                                 class="grid grid-cols-1 gap-4 sm:grid-cols-3"
                             >
                                 <div class="sm:col-span-1">
-                                    <label :for="`setting-${setting.id}`" class="block text-sm font-medium text-gray-700">
+                                    <label :for="`setting-${setting.id}`" class="block text-sm font-medium text-gray-300">
                                         {{ setting.label || formatKey(setting.key) }}
-                                        <span v-if="setting.is_sensitive" class="text-red-500 ml-1">*</span>
+                                        <span v-if="setting.is_sensitive" class="text-red-400 ml-1">*</span>
                                     </label>
-                                    <p v-if="setting.description" class="mt-1 text-xs text-gray-500">
+                                    <p v-if="setting.description" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                         {{ setting.description }}
                                     </p>
                                 </div>
@@ -156,7 +156,7 @@
                                         :id="`setting-${setting.id}`"
                                         type="checkbox"
                                         v-model="setting.actual_value"
-                                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-600 rounded bg-gray-700"
                                     />
                                     <input
                                         v-else
@@ -164,7 +164,7 @@
                                         :type="setting.is_sensitive ? 'password' : 'text'"
                                         v-model="setting.actual_value"
                                         :placeholder="setting.is_sensitive ? '********' : 'Enter value'"
-                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400"
                                     />
                                 </div>
                             </div>
@@ -174,13 +174,13 @@
 
                 <!-- Logs Tab -->
                 <div v-if="activeTab === 'logs'" class="px-4 py-5 sm:p-6">
-                    <div class="mb-4 flex gap-2">
+                    <div class="mb-4 flex gap-2 flex-wrap">
                         <input
                             v-model="logSearch"
                             @keyup.enter="fetchLogs"
                             type="text"
                             placeholder="Search logs..."
-                            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400"
                         />
                         <button
                             @click="fetchLogs"
@@ -192,14 +192,14 @@
                         </button>
                         <button
                             @click="logSearch = ''; fetchLogs()"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                             <X class="h-4 w-4" />
                             Clear
                         </button>
                         <a
                             href="/agent-settings/logs/download"
-                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            class="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                             <Download class="h-4 w-4" />
                             Download Entire Log
@@ -207,14 +207,14 @@
                     </div>
 
                     <div class="mb-2 flex items-center gap-2">
-                        <span v-if="logFileName" class="text-sm text-gray-500">
+                        <span v-if="logFileName" class="text-sm text-gray-500 dark:text-gray-400">
                             Showing: {{ logFileName }}
                         </span>
                         <Loader2
                             v-if="loadingLogs"
-                            class="h-4 w-4 text-indigo-600 animate-spin"
+                            class="h-4 w-4 text-indigo-600 dark:text-indigo-400 animate-spin"
                         />
-                        <span v-if="!loadingLogs" class="text-xs text-green-600">● Live</span>
+                        <span v-if="!loadingLogs" class="text-xs text-green-600 dark:text-green-400">● Live</span>
                     </div>
 
                     <div class="bg-gray-900 rounded-lg p-4 overflow-auto" style="max-height: 600px;">
