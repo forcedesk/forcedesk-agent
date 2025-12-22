@@ -289,6 +289,32 @@ class AgentSettingsController extends Controller
     }
 
     /**
+     * Download entire log file
+     */
+    public function downloadLogs()
+    {
+        $logPath = storage_path('logs');
+
+        // Find the most recent log file
+        $logFiles = glob($logPath . '/laravel*.log');
+        if (empty($logFiles)) {
+            return response()->json([
+                'error' => 'No log files found',
+            ], 404);
+        }
+
+        // Sort by modified time, most recent first
+        usort($logFiles, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        $mostRecentLog = $logFiles[0];
+        $fileName = basename($mostRecentLog);
+
+        return response()->download($mostRecentLog, $fileName);
+    }
+
+    /**
      * Export settings to config/agentconfig.php file
      */
     public function exportConfig()
