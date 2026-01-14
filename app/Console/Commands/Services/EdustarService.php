@@ -70,7 +70,7 @@ class EdustarService extends Command
         }
 
         // The URL of the EduSTAR MC API endpoint.
-        $url = 'https://apps.edustar.vic.edu.au/edustarmc/api/MC/GetStudents/'.agent_config('emc.emc_school_code').'/FULL';
+        $url = 'https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true';
 
         try {
             $client = new Client();
@@ -108,18 +108,12 @@ class EdustarService extends Command
                     $edupassaccount->save();
                 } else {
 
-                    try {
-                        Http::withBasicAuth(agent_config('emc.emc_username'), agent_config('emc.emc_password'))->retry(5, 100)->post('https://apps.edustar.vic.edu.au/edustarmc/api/MC/ResetStudentPwd', ['schoolId' => agent_config('emc.emc_school_code'), 'dn' => $data['ldap_dn'], 'newPass' => $genpassword]);
-                    } catch (ConnectionException) {
-                        \Log::error('Could not reset student password for '.$item->_login);
-                    }
-
                     $edupassaccount = new EdupassAccounts;
                     $edupassaccount->login = $data['login'];
                     $edupassaccount->firstName = $data['firstName'];
                     $edupassaccount->lastName = $data['lastName'];
                     $edupassaccount->displayName = $data['displayName'];
-                    $edupassaccount->password = $genpassword;
+                    $edupassaccount->password = 'Not Yet Set';
                     $edupassaccount->student_class = $data['student_class'];
                     $edupassaccount->ldap_dn = $data['ldap_dn'];
                     $edupassaccount->save();
