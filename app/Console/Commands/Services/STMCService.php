@@ -2,9 +2,6 @@
 
 namespace App\Console\Commands\Services;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Cookie\CookieJar;
-use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
 
 class STMCService extends Command
@@ -24,24 +21,9 @@ class STMCService extends Command
     protected $description = 'Performs a synchronization of student data from the STMC (EduSTAR Management Console).';
 
     /**
-     * @var CookieJar
+     * @var string Path to cookie file for session persistence
      */
-    private CookieJar $cookieJar;
-
-    /**
-     * @var Client
-     */
-    private Client $client;
-
-    /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
+    private string $cookieFile;
 
     /**
      * Execute the console command.
@@ -57,28 +39,14 @@ class STMCService extends Command
 
         $schoolCode = agent_config('emc.emc_school_code');
 
-        // Initialize cookie jar for session persistence
-        $this->cookieJar = new CookieJar();
-
-        // Build credentials in domain\username:password format
-        $credentials = agent_config('emc.emc_username') . ':' . agent_config('emc.emc_password');
-
-        // Initialize Guzzle client with cURL options for NTLM auth (matching curl --ntlm behavior)
-        $this->client = new Client([
-            'verify' => false,
-            'cookies' => $this->cookieJar,
-            'allow_redirects' => true,
-            'curl' => [
-                CURLOPT_HTTPAUTH => CURLAUTH_NTLM,
-                CURLOPT_USERPWD => $credentials,
-                CURLOPT_UNRESTRICTED_AUTH => true,
-            ],
-        ]);
+        // Create a temp file for cookie storage (session persistence)
+        $this->cookieFile = tempnam(sys_get_temp_dir(), 'stmc_cookies_');
 
         try {
             // Step 1: Initial login to STMC
             $this->info('Step 1: Logging in to STMC...');
-            if (!$this->performLogin()) {
+            $loginResponse = $this->makeRequest('https://stmc.education.vic.gov.au');
+            if ($loginResponse === null) {
                 $this->error('Failed to login to STMC.');
                 return false;
             }
@@ -86,7 +54,7 @@ class STMCService extends Command
 
             // Step 2: Select school from dropdown
             $this->info('Step 2: Selecting school with code: ' . $schoolCode);
-            if (!$this->selectSchool($schoolCode)) {
+            if (!$this->selectSchool($schoolCode, $loginResponse)) {
                 $this->error('Failed to select school.');
                 return false;
             }
@@ -94,7 +62,8 @@ class STMCService extends Command
 
             // Step 3: Navigate to stud_pwd page
             $this->info('Step 3: Navigating to student password page...');
-            if (!$this->navigateToStudentPasswordPage()) {
+            $studPwdResponse = $this->makeRequest('https://stmc.education.vic.gov.au/stud_pwd');
+            if ($studPwdResponse === null) {
                 $this->error('Failed to navigate to student password page.');
                 return false;
             }
@@ -102,122 +71,115 @@ class STMCService extends Command
 
             // Step 4: Fetch student data from API
             $this->info('Step 4: Fetching student data...');
-            $studentData = $this->fetchStudentData();
+            $studentData = $this->makeRequest('https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true');
 
-            if ($studentData === false) {
+            if ($studentData === null) {
                 $this->error('Failed to fetch student data.');
                 return false;
             }
 
             // Output the JSON response to console
             $this->info('Student data retrieved successfully:');
-            $this->line(json_encode($studentData, JSON_PRETTY_PRINT));
+            $decoded = json_decode($studentData, true);
+            if ($decoded !== null) {
+                $this->line(json_encode($decoded, JSON_PRETTY_PRINT));
+            } else {
+                $this->line($studentData);
+            }
 
             return true;
 
         } catch (\Exception $e) {
             $this->error('Error: ' . $e->getMessage());
             return false;
+        } finally {
+            // Clean up cookie file
+            if (file_exists($this->cookieFile)) {
+                unlink($this->cookieFile);
+            }
         }
     }
 
     /**
-     * Perform initial login to STMC
+     * Make a cURL request with NTLM authentication
      *
-     * @return bool
+     * @param string $url
+     * @param string $method
+     * @param array $postData
+     * @return string|null
      */
-    private function performLogin(): bool
+    private function makeRequest(string $url, string $method = 'GET', array $postData = []): ?string
     {
-        try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au');
+        $ch = curl_init();
 
-            return $response->getStatusCode() === 200;
-        } catch (GuzzleException $e) {
-            $this->warn('Login error: ' . $e->getMessage());
-            return false;
+        $credentials = agent_config('emc.emc_username') . ':' . agent_config('emc.emc_password');
+
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTPAUTH => CURLAUTH_NTLM,
+            CURLOPT_USERPWD => $credentials,
+            CURLOPT_UNRESTRICTED_AUTH => true,
+            CURLOPT_COOKIEJAR => $this->cookieFile,
+            CURLOPT_COOKIEFILE => $this->cookieFile,
+        ]);
+
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
         }
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        $errno = curl_errno($ch);
+
+        curl_close($ch);
+
+        if ($errno) {
+            $this->warn('cURL error: ' . $error);
+            return null;
+        }
+
+        if ($httpCode !== 200) {
+            $this->warn('HTTP error: ' . $httpCode . ' for URL: ' . $url);
+            return null;
+        }
+
+        return $response;
     }
 
     /**
      * Select school from the dropdown based on school code
      *
      * @param string $schoolCode
+     * @param string $html
      * @return bool
      */
-    private function selectSchool(string $schoolCode): bool
+    private function selectSchool(string $schoolCode, string $html): bool
     {
-        try {
-            // First, get the page to find the school selection form/dropdown
-            $response = $this->client->get('https://stmc.education.vic.gov.au');
+        // Look for the school in the dropdown options (format: "1234 - Some School")
+        if (preg_match('/<option[^>]*value="([^"]*)"[^>]*>[^<]*' . preg_quote($schoolCode, '/') . '[^<]*<\/option>/i', $html, $matches)) {
+            $schoolValue = $matches[1];
+            $this->info('Found school value: ' . $schoolValue);
 
-            $html = (string) $response->getBody();
-
-            // Look for the school in the dropdown options (format: "1234 - Some School")
-            // The pattern matches options where the value starts with the school code
-            if (preg_match('/<option[^>]*value="([^"]*' . preg_quote($schoolCode, '/') . '[^"]*)"[^>]*>([^<]*' . preg_quote($schoolCode, '/') . '[^<]*)<\/option>/i', $html, $matches)) {
-                $schoolValue = $matches[1];
-                $this->info('Found school: ' . $matches[2]);
-
-                // Submit the school selection
-                $response = $this->client->post('https://stmc.education.vic.gov.au', [
-                    'form_params' => [
-                        'school' => $schoolValue,
-                    ],
-                ]);
-
-                return $response->getStatusCode() === 200;
-            }
-
-            // Alternative: Try selecting by posting the school code directly
-            $response = $this->client->post('https://stmc.education.vic.gov.au', [
-                'form_params' => [
-                    'school' => $schoolCode,
-                ],
+            // Submit the school selection
+            $response = $this->makeRequest('https://stmc.education.vic.gov.au', 'POST', [
+                'school' => $schoolValue,
             ]);
 
-            return $response->getStatusCode() === 200;
-
-        } catch (GuzzleException $e) {
-            $this->warn('School selection error: ' . $e->getMessage());
-            return false;
+            return $response !== null;
         }
-    }
 
-    /**
-     * Navigate to the student password page
-     *
-     * @return bool
-     */
-    private function navigateToStudentPasswordPage(): bool
-    {
-        try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au/stud_pwd');
+        // Alternative: Try selecting by posting the school code directly
+        $this->info('School not found in dropdown, trying direct code: ' . $schoolCode);
+        $response = $this->makeRequest('https://stmc.education.vic.gov.au', 'POST', [
+            'school' => $schoolCode,
+        ]);
 
-            return $response->getStatusCode() === 200;
-        } catch (GuzzleException $e) {
-            $this->warn('Student password page error: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Fetch student data from the API
-     *
-     * @return array|false
-     */
-    private function fetchStudentData()
-    {
-        try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true');
-
-            if ($response->getStatusCode() === 200) {
-                return json_decode($response->getBody(), true);
-            }
-
-            return false;
-        } catch (GuzzleException $e) {
-            $this->warn('Fetch student data error: ' . $e->getMessage());
-            return false;
-        }
+        return $response !== null;
     }
 }
