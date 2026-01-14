@@ -73,7 +73,7 @@ class EdustarService extends Command
         $url = 'https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true';
 
         try {
-            $client = new Client();
+            $client = new Client(['defaults' => [ 'verify' => false ]]);
             $response = $client->get($url, [
                 'auth' => [
                     agent_config('emc.emc_username'),
