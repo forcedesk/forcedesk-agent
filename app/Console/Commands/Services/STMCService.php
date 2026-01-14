@@ -3,6 +3,10 @@
 namespace App\Console\Commands\Services;
 
 use Illuminate\Console\Command;
+use Laravel\Dusk\Browser;
+use Facebook\WebDriver\Chrome\ChromeOptions;
+use Facebook\WebDriver\Remote\RemoteWebDriver;
+use Facebook\WebDriver\Remote\DesiredCapabilities;
 
 class STMCService extends Command
 {
@@ -21,11 +25,6 @@ class STMCService extends Command
     protected $description = 'Performs a synchronization of student data from the STMC (EduSTAR Management Console).';
 
     /**
-     * @var string Path to cookie file for session persistence
-     */
-    private string $cookieFile;
-
-    /**
      * Execute the console command.
      *
      * @return int
@@ -37,54 +36,107 @@ class STMCService extends Command
             return false;
         }
 
+        $username = agent_config('emc.emc_username');
+        $password = agent_config('emc.emc_password');
         $schoolCode = agent_config('emc.emc_school_code');
 
-        // Create a temp file for cookie storage (session persistence)
-        $this->cookieFile = tempnam(sys_get_temp_dir(), 'stmc_cookies_');
+        // URL-encode credentials for embedding in URL (handles special chars and backslash)
+        $encodedUsername = rawurlencode($username);
+        $encodedPassword = rawurlencode($password);
+        $baseUrl = "https://{$encodedUsername}:{$encodedPassword}@stmc.education.vic.gov.au";
+
+        $driver = null;
 
         try {
+            // Set up Chrome options
+            $options = new ChromeOptions();
+            $options->addArguments([
+                '--headless',
+                '--disable-gpu',
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--ignore-certificate-errors',
+                '--auth-server-whitelist=*stmc.education.vic.gov.au',
+                '--auth-negotiate-delegate-whitelist=*stmc.education.vic.gov.au',
+            ]);
+
+            $capabilities = DesiredCapabilities::chrome();
+            $capabilities->setCapability(ChromeOptions::CAPABILITY, $options);
+
+            // Start ChromeDriver (assumes chromedriver is running on port 9515)
+            $this->info('Starting browser...');
+            $driver = RemoteWebDriver::create('http://localhost:9515', $capabilities);
+            $browser = new Browser($driver);
+
             // Step 1: Initial login to STMC
             $this->info('Step 1: Logging in to STMC...');
-            $loginResponse = $this->makeRequest('https://stmc.education.vic.gov.au');
-            if ($loginResponse === null) {
-                $this->error('Failed to login to STMC.');
-                return false;
-            }
+            $browser->visit($baseUrl);
             $this->info('Login successful.');
 
             // Step 2: Select school from dropdown
             $this->info('Step 2: Selecting school with code: ' . $schoolCode);
-            if (!$this->selectSchool($schoolCode, $loginResponse)) {
-                $this->error('Failed to select school.');
-                return false;
+
+            // Wait for page to load and find dropdown
+            $browser->pause(2000);
+
+            // Find and select school from dropdown using JavaScript
+            $schoolSelected = $browser->script("
+                var selects = document.querySelectorAll('select');
+                var found = false;
+                selects.forEach(function(select) {
+                    var options = select.options;
+                    for (var i = 0; i < options.length; i++) {
+                        if (options[i].text.includes('{$schoolCode}')) {
+                            select.selectedIndex = i;
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                            found = true;
+                            break;
+                        }
+                    }
+                });
+                return found;
+            ");
+
+            if (!empty($schoolSelected[0])) {
+                $this->info('School selected successfully.');
+            } else {
+                $this->warn('Could not find school in dropdown, continuing anyway...');
             }
-            $this->info('School selected successfully.');
+
+            // Submit the form if there's a submit button
+            $browser->script("
+                var form = document.querySelector('form');
+                if (form) {
+                    var submit = form.querySelector('button[type=\"submit\"], input[type=\"submit\"]');
+                    if (submit) submit.click();
+                    else form.submit();
+                }
+            ");
+
+            $browser->pause(2000);
 
             // Step 3: Navigate to stud_pwd page
             $this->info('Step 3: Navigating to student password page...');
-            $studPwdResponse = $this->makeRequest('https://stmc.education.vic.gov.au/stud_pwd');
-            if ($studPwdResponse === null) {
-                $this->error('Failed to navigate to student password page.');
-                return false;
-            }
+            $browser->visit($baseUrl . '/stud_pwd');
+            $browser->pause(1000);
             $this->info('Student password page accessed.');
 
             // Step 4: Fetch student data from API
             $this->info('Step 4: Fetching student data...');
-            $studentData = $this->makeRequest('https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true');
+            $browser->visit($baseUrl . '/api/SchGetStuds?fullProps=true');
+            $browser->pause(1000);
 
-            if ($studentData === null) {
-                $this->error('Failed to fetch student data.');
-                return false;
-            }
+            // Get the page content (JSON response)
+            $content = $browser->script("return document.body.innerText || document.body.textContent;");
+            $jsonContent = $content[0] ?? '';
 
             // Output the JSON response to console
             $this->info('Student data retrieved successfully:');
-            $decoded = json_decode($studentData, true);
+            $decoded = json_decode($jsonContent, true);
             if ($decoded !== null) {
                 $this->line(json_encode($decoded, JSON_PRETTY_PRINT));
             } else {
-                $this->line($studentData);
+                $this->line($jsonContent);
             }
 
             return true;
@@ -93,93 +145,9 @@ class STMCService extends Command
             $this->error('Error: ' . $e->getMessage());
             return false;
         } finally {
-            // Clean up cookie file
-            if (file_exists($this->cookieFile)) {
-                unlink($this->cookieFile);
+            if ($driver) {
+                $driver->quit();
             }
         }
-    }
-
-    /**
-     * Make a cURL request with NTLM authentication
-     *
-     * @param string $url
-     * @param string $method
-     * @param array $postData
-     * @return string|null
-     */
-    private function makeRequest(string $url, string $method = 'GET', array $postData = []): ?string
-    {
-        $ch = curl_init();
-
-        $credentials = agent_config('emc.emc_username') . ':' . agent_config('emc.emc_password');
-
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_HTTPAUTH => CURLAUTH_NTLM,
-            CURLOPT_USERPWD => $credentials,
-            CURLOPT_UNRESTRICTED_AUTH => true,
-            CURLOPT_COOKIEJAR => $this->cookieFile,
-            CURLOPT_COOKIEFILE => $this->cookieFile,
-        ]);
-
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        }
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        $errno = curl_errno($ch);
-
-        curl_close($ch);
-
-        if ($errno) {
-            $this->warn('cURL error: ' . $error);
-            return null;
-        }
-
-        if ($httpCode !== 200) {
-            $this->warn('HTTP error: ' . $httpCode . ' for URL: ' . $url);
-            return null;
-        }
-
-        return $response;
-    }
-
-    /**
-     * Select school from the dropdown based on school code
-     *
-     * @param string $schoolCode
-     * @param string $html
-     * @return bool
-     */
-    private function selectSchool(string $schoolCode, string $html): bool
-    {
-        // Look for the school in the dropdown options (format: "1234 - Some School")
-        if (preg_match('/<option[^>]*value="([^"]*)"[^>]*>[^<]*' . preg_quote($schoolCode, '/') . '[^<]*<\/option>/i', $html, $matches)) {
-            $schoolValue = $matches[1];
-            $this->info('Found school value: ' . $schoolValue);
-
-            // Submit the school selection
-            $response = $this->makeRequest('https://stmc.education.vic.gov.au', 'POST', [
-                'school' => $schoolValue,
-            ]);
-
-            return $response !== null;
-        }
-
-        // Alternative: Try selecting by posting the school code directly
-        $this->info('School not found in dropdown, trying direct code: ' . $schoolCode);
-        $response = $this->makeRequest('https://stmc.education.vic.gov.au', 'POST', [
-            'school' => $schoolCode,
-        ]);
-
-        return $response !== null;
     }
 }
