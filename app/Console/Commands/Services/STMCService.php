@@ -2,8 +2,6 @@
 
 namespace App\Console\Commands\Services;
 
-use App\Helper\AgentConnectivityHelper;
-use App\Models\EdupassAccounts;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
 use GuzzleHttp\Exception\GuzzleException;
@@ -62,11 +60,16 @@ class STMCService extends Command
         // Initialize cookie jar for session persistence
         $this->cookieJar = new CookieJar();
 
-        // Initialize Guzzle client with cookie jar and SSL verification disabled
+        // Initialize Guzzle client with cookie jar, SSL verification disabled, and NTLM auth
         $this->client = new Client([
             'verify' => false,
             'cookies' => $this->cookieJar,
             'allow_redirects' => true,
+            'auth' => [
+                agent_config('emc.emc_username'),
+                agent_config('emc.emc_password'),
+                'ntlm',
+            ],
         ]);
 
         try {
@@ -123,13 +126,7 @@ class STMCService extends Command
     private function performLogin(): bool
     {
         try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au', [
-                'verify' => false,
-                'auth' => [
-                    agent_config('emc.emc_username'),
-                    agent_config('emc.emc_password'),
-                ],
-            ]);
+            $response = $this->client->get('https://stmc.education.vic.gov.au');
 
             return $response->getStatusCode() === 200;
         } catch (GuzzleException $e) {
@@ -148,13 +145,7 @@ class STMCService extends Command
     {
         try {
             // First, get the page to find the school selection form/dropdown
-            $response = $this->client->get('https://stmc.education.vic.gov.au', [
-                'verify' => false,
-                'auth' => [
-                    agent_config('emc.emc_username'),
-                    agent_config('emc.emc_password'),
-                ],
-            ]);
+            $response = $this->client->get('https://stmc.education.vic.gov.au');
 
             $html = (string) $response->getBody();
 
@@ -166,11 +157,6 @@ class STMCService extends Command
 
                 // Submit the school selection
                 $response = $this->client->post('https://stmc.education.vic.gov.au', [
-                    'verify' => false,
-                    'auth' => [
-                        agent_config('emc.emc_username'),
-                        agent_config('emc.emc_password'),
-                    ],
                     'form_params' => [
                         'school' => $schoolValue,
                     ],
@@ -181,11 +167,6 @@ class STMCService extends Command
 
             // Alternative: Try selecting by posting the school code directly
             $response = $this->client->post('https://stmc.education.vic.gov.au', [
-                'verify' => false,
-                'auth' => [
-                    agent_config('emc.emc_username'),
-                    agent_config('emc.emc_password'),
-                ],
                 'form_params' => [
                     'school' => $schoolCode,
                 ],
@@ -207,13 +188,7 @@ class STMCService extends Command
     private function navigateToStudentPasswordPage(): bool
     {
         try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au/stud_pwd', [
-                'verify' => false,
-                'auth' => [
-                    agent_config('emc.emc_username'),
-                    agent_config('emc.emc_password'),
-                ],
-            ]);
+            $response = $this->client->get('https://stmc.education.vic.gov.au/stud_pwd');
 
             return $response->getStatusCode() === 200;
         } catch (GuzzleException $e) {
@@ -230,13 +205,7 @@ class STMCService extends Command
     private function fetchStudentData()
     {
         try {
-            $response = $this->client->get('https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true', [
-                'verify' => false,
-                'auth' => [
-                    agent_config('emc.emc_username'),
-                    agent_config('emc.emc_password'),
-                ],
-            ]);
+            $response = $this->client->get('https://stmc.education.vic.gov.au/api/SchGetStuds?fullProps=true');
 
             if ($response->getStatusCode() === 200) {
                 return json_decode($response->getBody(), true);
