@@ -60,15 +60,18 @@ class STMCService extends Command
         // Initialize cookie jar for session persistence
         $this->cookieJar = new CookieJar();
 
-        // Initialize Guzzle client with cookie jar, SSL verification disabled, and NTLM auth
+        // Build credentials in domain\username:password format
+        $credentials = agent_config('emc.emc_username') . ':' . agent_config('emc.emc_password');
+
+        // Initialize Guzzle client with cURL options for NTLM auth (matching curl --ntlm behavior)
         $this->client = new Client([
             'verify' => false,
             'cookies' => $this->cookieJar,
             'allow_redirects' => true,
-            'auth' => [
-                agent_config('emc.emc_username'),
-                agent_config('emc.emc_password'),
-                'ntlm',
+            'curl' => [
+                CURLOPT_HTTPAUTH => CURLAUTH_NTLM,
+                CURLOPT_USERPWD => $credentials,
+                CURLOPT_UNRESTRICTED_AUTH => true,
             ],
         ]);
 
