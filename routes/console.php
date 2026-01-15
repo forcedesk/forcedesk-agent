@@ -26,13 +26,13 @@ Schedule::command('agent:kiosk-service')->everyFiveSeconds()->withoutOverlapping
 Schedule::command('agent:papercut-service')->everyThirtyMinutes()->withoutOverlapping()->runInBackground();
 
 /* Synchronize Local Users */
-Schedule::command('agent:usersync-service')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
+//Schedule::command('agent:usersync-service')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
 
 /* Synchronize EMC Users */
-Schedule::command('agent:edustar-service')->daily()->withoutOverlapping()->runInBackground();
+//Schedule::command('agent:edustar-service')->daily()->withoutOverlapping()->runInBackground();
 
 /* Synchronize CRT Accounts Users */
-Schedule::command('agent:crtaccount-service')->daily()->withoutOverlapping()->runInBackground();
+//Schedule::command('agent:crtaccount-service')->daily()->withoutOverlapping()->runInBackground();
 
 /* Send Agent Heartbeat */
 Schedule::command('agent:heartbeat')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
