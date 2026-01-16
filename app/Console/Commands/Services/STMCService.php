@@ -80,7 +80,7 @@ class STMCService extends Command
 
             // Step 2: Select school from dropdown
             $this->info('Step 2: Selecting school with code: ' . $schoolCode);
-            $browser->screenshot('code');
+            $browser->screenshot('/tmp/code');
 
             // Wait for page to load and find dropdown
             $browser->pause(2000);
