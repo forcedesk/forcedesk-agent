@@ -24,6 +24,11 @@ class STMCService extends Command
      */
     protected $description = 'Performs a synchronization of student data from the STMC (EduSTAR Management Console).';
 
+    public static function prepare(): void
+    {
+        static::startChromeDriver(['--port=9515']);
+    }
+
     /**
      * Execute the console command.
      *
@@ -75,6 +80,7 @@ class STMCService extends Command
 
             // Step 2: Select school from dropdown
             $this->info('Step 2: Selecting school with code: ' . $schoolCode);
+            $browser->screenshot('code');
 
             // Wait for page to load and find dropdown
             $browser->pause(2000);
