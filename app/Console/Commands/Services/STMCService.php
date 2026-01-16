@@ -77,6 +77,7 @@ class STMCService extends Command
             $this->info('Step 1: Logging in to STMC...');
             $browser->visit($baseUrl);
             $this->info('Login successful.');
+            $browser->screenshot('/tmp/login');
 
             // Step 2: Select school from dropdown
             $this->info('Step 2: Selecting school with code: ' . $schoolCode);
