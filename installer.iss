@@ -29,8 +29,12 @@ RestartIfNeededByRun=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "forcedesk-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "forcedesk-icon.ico";  DestDir: "{app}"; Flags: ignoreversion
+; The agent exe is downloaded at install time — see PrepareToInstall below.
+Source: "forcedesk-icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+
+[UninstallDelete]
+; Remove the downloaded agent binary on uninstall (not tracked via [Files]).
+Type: files; Name: "{app}\{#MyAppExeName}"
 
 [Run]
 ; Install the Windows Service (auto-start, LocalSystem).
@@ -56,6 +60,9 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "uninstall"; \
 
 [Code]
 
+const
+  AgentDownloadURL = 'https://cdn.forcedesk.io/assets/forcedeskagent/latest.exe';
+
 { -----------------------------------------------------------------------
   Validate that config.toml is present next to the installer before
   allowing setup to proceed. Without it the agent cannot function and
@@ -77,8 +84,33 @@ begin
 end;
 
 { -----------------------------------------------------------------------
-  Copy config.toml from alongside the installer into the data directory.
-  Runs before files are installed so the agent finds it on first start.
+  Download the latest agent binary from the CDN before installation
+  begins. Returning a non-empty string aborts setup and displays the
+  message to the user.
+  ----------------------------------------------------------------------- }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  TmpExe:   String;
+  PSCmd:    String;
+  ExitCode: Integer;
+begin
+  Result := '';
+  TmpExe := ExpandConstant('{tmp}\forcedesk-agent.exe');
+
+  WizardForm.StatusLabel.Caption := 'Downloading ForceDesk Agent...';
+  PSCmd := '-NoProfile -NonInteractive -Command ' +
+           '"Invoke-WebRequest -Uri ''' + AgentDownloadURL + ''' ' +
+           '-OutFile ''' + TmpExe + ''' -UseBasicParsing"';
+
+  if not Exec('powershell.exe', PSCmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode)
+     or (ExitCode <> 0) then
+    Result := 'Failed to download ForceDesk Agent from the update server.' + #13#10#13#10 +
+              'Please check your internet connection and try again.';
+end;
+
+{ -----------------------------------------------------------------------
+  Copy config.toml into the data directory and move the downloaded
+  agent binary into the install directory.
   ----------------------------------------------------------------------- }
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -87,6 +119,7 @@ var
 begin
   if CurStep = ssInstall then
   begin
+    { Copy config.toml into the data directory }
     SrcConfig := ExpandConstant('{src}\config.toml');
     DestDir   := ExpandConstant('{commonappdata}\ForceDeskAgent');
 
@@ -95,6 +128,13 @@ begin
 
     if not FileCopy(SrcConfig, DestDir + '\config.toml', False) then
       MsgBox('Warning: could not copy config.toml to ' + DestDir + '.' + #13#10 +
+             'The service may not start correctly.', mbError, MB_OK);
+
+    { Move the downloaded agent binary into the install directory }
+    if not FileCopy(ExpandConstant('{tmp}\forcedesk-agent.exe'),
+                    ExpandConstant('{app}\forcedesk-agent.exe'), False) then
+      MsgBox('Warning: could not place forcedesk-agent.exe in ' +
+             ExpandConstant('{app}') + '.' + #13#10 +
              'The service may not start correctly.', mbError, MB_OK);
   end;
 end;
