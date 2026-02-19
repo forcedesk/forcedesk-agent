@@ -14,6 +14,7 @@ DisableProgramGroupPage=yes
 DisableWelcomePage=no
 OutputBaseFilename=forcedesk-agent-setup
 OutputDir=.
+SetupIconFile=forcedesk-icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -29,6 +30,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "forcedesk-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "forcedesk-icon.ico";  DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
 ; Install the Windows Service (auto-start, LocalSystem).
