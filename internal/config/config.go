@@ -10,6 +10,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/term"
+
+	"github.com/forcedesk/forcedesk-agent/internal/secure"
 )
 
 type Tenant struct {
@@ -17,12 +19,30 @@ type Tenant struct {
 	APIKey    string `toml:"api_key"`
 	UUID      string `toml:"uuid"`
 	VerifySSL bool   `toml:"verify_ssl"`
+	apiKeySec *secure.String
+}
+
+// GetAPIKey returns the API key from secure storage, or falls back to the plain text field.
+func (t *Tenant) GetAPIKey() string {
+	if t.apiKeySec != nil && !t.apiKeySec.IsEmpty() {
+		return t.apiKeySec.String()
+	}
+	return t.APIKey
 }
 
 type Papercut struct {
-	Enabled bool   `toml:"enabled"`
-	APIURL  string `toml:"api_url"`
-	APIKey  string `toml:"api_key"`
+	Enabled   bool   `toml:"enabled"`
+	APIURL    string `toml:"api_url"`
+	APIKey    string `toml:"api_key"`
+	apiKeySec *secure.String
+}
+
+// GetAPIKey returns the API key from secure storage, or falls back to the plain text field.
+func (p *Papercut) GetAPIKey() string {
+	if p.apiKeySec != nil && !p.apiKeySec.IsEmpty() {
+		return p.apiKeySec.String()
+	}
+	return p.APIKey
 }
 
 type DeviceManager struct {
@@ -82,6 +102,17 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Convert sensitive strings to secure storage.
+	if cfg.Tenant.APIKey != "" {
+		cfg.Tenant.apiKeySec = secure.NewString(cfg.Tenant.APIKey)
+		// Zero out the plain text version.
+		cfg.Tenant.APIKey = ""
+	}
+	if cfg.Papercut.APIKey != "" {
+		cfg.Papercut.apiKeySec = secure.NewString(cfg.Papercut.APIKey)
+		cfg.Papercut.APIKey = ""
+	}
+
 	mu.Lock()
 	instance = cfg
 	mu.Unlock()
@@ -111,23 +142,27 @@ func Setup() (*Config, error) {
 	fmt.Println("===================================")
 	fmt.Printf("Config will be written to: %s\n\n", ConfigPath())
 
-	// --- Tenant ---
+	// Prompt for tenant configuration.
 	fmt.Println("[Tenant]")
 	cfg.Tenant.URL = promptRequired(r, "Tenant URL (e.g. https://tenant.schooldesk.io)")
 	cfg.Tenant.UUID = promptRequired(r, "Agent UUID")
-	cfg.Tenant.APIKey = promptPassword(r, "API Key")
+	apiKey := promptPassword(r, "API Key")
+	cfg.Tenant.APIKey = apiKey
+	cfg.Tenant.apiKeySec = secure.NewString(apiKey)
 	cfg.Tenant.VerifySSL = promptBool(r, "Verify SSL certificates?", true)
 
-	// --- Papercut (optional) ---
+	// Prompt for optional Papercut integration.
 	fmt.Println()
 	fmt.Println("[Papercut]")
 	if promptBool(r, "Enable Papercut integration?", false) {
 		cfg.Papercut.Enabled = true
 		cfg.Papercut.APIURL = promptDefault(r, "Papercut API URL", "http://papercut-server:9191/rpc/api/xmlrpc")
-		cfg.Papercut.APIKey = promptPassword(r, "Papercut API Key")
+		pcAPIKey := promptPassword(r, "Papercut API Key")
+		cfg.Papercut.APIKey = pcAPIKey
+		cfg.Papercut.apiKeySec = secure.NewString(pcAPIKey)
 	}
 
-	// Write to disk.
+	// Write configuration to disk.
 	if err := save(cfg); err != nil {
 		return nil, err
 	}
@@ -157,7 +192,9 @@ func save(cfg *Config) error {
 	if err := os.MkdirAll(DataDir(), 0755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
-	f, err := os.Create(ConfigPath())
+	// Create config file with restrictive permissions (owner read/write only).
+	// This prevents other users from reading API keys and passwords.
+	f, err := os.OpenFile(ConfigPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("create config file: %w", err)
 	}
@@ -177,10 +214,6 @@ func defaults() *Config {
 		},
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Prompt helpers
-// ---------------------------------------------------------------------------
 
 // promptRequired loops until the user enters a non-empty value.
 func promptRequired(r *bufio.Reader, label string) string {
@@ -247,10 +280,10 @@ func promptPassword(r *bufio.Reader, label string) string {
 				fmt.Println("  (value is required)")
 				continue
 			}
-			// term.ReadPassword failed for some reason; fall through to plain.
+			// term.ReadPassword failed; fall through to plain text input.
 		}
 
-		// Plain fallback (piped input or non-terminal).
+		// Fallback for piped input or non-terminal environments.
 		val, _ := r.ReadString('\n')
 		val = strings.TrimSpace(val)
 		if val != "" {

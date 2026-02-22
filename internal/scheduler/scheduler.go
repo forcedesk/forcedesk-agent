@@ -12,15 +12,15 @@ type Task struct {
 	Interval time.Duration
 	Fn       func()
 
-	mu sync.Mutex // held while the task goroutine is running (withoutOverlapping)
+	mu sync.Mutex // Prevents overlapping executions of the same task.
 }
 
 // Scheduler runs a set of Tasks on fixed intervals.
 type Scheduler struct {
 	tasks    []*Task
 	stopCh   chan struct{}
-	tickerWg sync.WaitGroup // one goroutine per task ticker loop
-	taskWg   sync.WaitGroup // one goroutine per running task invocation
+	tickerWg sync.WaitGroup // Tracks one goroutine per task ticker loop.
+	taskWg   sync.WaitGroup // Tracks all running task invocations.
 }
 
 // New creates an empty Scheduler.
@@ -44,18 +44,18 @@ func (s *Scheduler) Start() {
 	}
 }
 
-// Stop signals all ticker loops to exit and waits for all in-flight task
-// invocations to finish.
+// Stop signals all ticker loops to exit and waits for all in-flight task invocations to finish.
 func (s *Scheduler) Stop() {
 	close(s.stopCh)
 	s.tickerWg.Wait()
 	s.taskWg.Wait()
 }
 
+// loop manages a single task's ticker loop, firing it immediately and then on each interval.
 func (s *Scheduler) loop(t *Task) {
 	defer s.tickerWg.Done()
 
-	// Run immediately on start.
+	// Run the task immediately on start.
 	s.dispatch(t)
 
 	ticker := time.NewTicker(t.Interval)
@@ -71,8 +71,8 @@ func (s *Scheduler) loop(t *Task) {
 	}
 }
 
-// dispatch fires the task in a new goroutine, but only if the previous
-// invocation has finished (equivalent to withoutOverlapping).
+// dispatch fires the task in a new goroutine, but only if the previous invocation has finished.
+// This prevents overlapping executions of the same task.
 func (s *Scheduler) dispatch(t *Task) {
 	if !t.mu.TryLock() {
 		slog.Info("scheduler: skipping task, previous run still in progress", "task", t.Name)

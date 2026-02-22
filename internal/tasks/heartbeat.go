@@ -11,8 +11,8 @@ type heartbeatResponse struct {
 	Message string `json:"message"`
 }
 
-// Heartbeat confirms the agent can reach the tenant and that the tenant
-// acknowledges this agent. Runs every 5 minutes.
+// Heartbeat confirms bidirectional connectivity between the agent and tenant server.
+// Runs every 5 minutes to verify the agent is acknowledged by the tenant.
 func Heartbeat() {
 	slog.Info("heartbeat: starting")
 

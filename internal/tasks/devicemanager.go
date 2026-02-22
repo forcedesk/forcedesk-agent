@@ -13,7 +13,7 @@ import (
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
 
-// flexBool unmarshals JSON booleans (true/false) and integers (0/1).
+// flexBool is a custom type that unmarshals JSON booleans (true/false) and integers (0/1) as boolean values.
 type flexBool bool
 
 func (f *flexBool) UnmarshalJSON(b []byte) error {
@@ -53,8 +53,9 @@ type dmBackupResult struct {
 	Log      string      `json:"log"`
 }
 
-// DeviceManagerService fetches backup payloads from the tenant, SSHes into
-// each device, and POSTs the captured configuration. Runs every minute.
+// DeviceManagerService fetches network device backup configurations from the tenant,
+// connects to each device via SSH to capture running configurations, and reports results back.
+// Runs every minute.
 func DeviceManagerService() {
 	slog.Info("devicemanager: starting")
 

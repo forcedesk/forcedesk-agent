@@ -11,40 +11,56 @@ import (
 	"time"
 
 	"github.com/forcedesk/forcedesk-agent/internal/config"
+	"github.com/forcedesk/forcedesk-agent/internal/ratelimit"
 )
 
 const AgentVersion = "2.0.44-golang-win32"
 
 // Client is a thin wrapper around http.Client that automatically applies
-// the agent authentication headers to every request.
+// agent authentication headers (API key, UUID, version) to every request.
+// Includes rate limiting to prevent abuse.
 type Client struct {
-	http *http.Client
+	http    *http.Client
+	limiter *ratelimit.Limiter
 }
 
 // New creates a Client using the current agent configuration.
+// SSL verification can be disabled via the VerifySSL config option.
 func New() *Client {
 	cfg := config.Get()
+
+	// Warn if SSL verification is disabled.
+	if !cfg.Tenant.VerifySSL {
+		slog.Warn("SSL certificate verification is DISABLED - connections are vulnerable to MITM attacks",
+			"tenant_url", cfg.Tenant.URL)
+	}
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: !cfg.Tenant.VerifySSL, //nolint:gosec
 		},
 	}
+
+	// Rate limiter: max 100 requests, refill 1 token every 100ms (600/min max).
+	limiter := ratelimit.NewLimiter(100, 100*time.Millisecond)
+
 	return &Client{
 		http: &http.Client{
 			Transport: transport,
 			Timeout:   30 * time.Second,
 		},
+		limiter: limiter,
 	}
 }
 
-// URL prepends the configured tenant base URL to path.
+// URL constructs a full URL by prepending the configured tenant base URL to the given path.
 func URL(path string) string {
 	return config.Get().Tenant.URL + path
 }
 
 func (c *Client) applyHeaders(req *http.Request) {
 	cfg := config.Get()
-	req.Header.Set("Authorization", "Bearer "+cfg.Tenant.APIKey)
+	req.Header.Set("Authorization", "Bearer "+cfg.Tenant.GetAPIKey())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "ForceDeskAgent\\v"+AgentVersion)
 	req.Header.Set("x-forcedesk-agent", cfg.Tenant.UUID)
@@ -54,6 +70,12 @@ func (c *Client) applyHeaders(req *http.Request) {
 
 // Get performs an authenticated GET request to the given URL.
 func (c *Client) Get(url string) (*http.Response, error) {
+	// Apply rate limiting.
+	if !c.limiter.Allow() {
+		slog.Warn("rate limit reached, throttling request", "url", url)
+		c.limiter.Wait()
+	}
+
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -62,14 +84,20 @@ func (c *Client) Get(url string) (*http.Response, error) {
 	return c.http.Do(req)
 }
 
-// PostJSON performs an authenticated POST request with v serialised as the
-// JSON body.
+// PostJSON performs an authenticated POST request with the provided value serialized as JSON in the request body.
 func (c *Client) PostJSON(url string, v any) (*http.Response, error) {
+	// Apply rate limiting.
+	if !c.limiter.Allow() {
+		slog.Warn("rate limit reached, throttling request", "url", url)
+		c.limiter.Wait()
+	}
+
 	body, err := json.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("marshal body: %w", err)
 	}
-	slog.Debug("tenant: POST payload", "url", url, "body", string(body))
+	// Log request details without exposing sensitive data.
+	slog.Debug("tenant: POST request", "url", url, "body_size", len(body))
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -78,7 +106,7 @@ func (c *Client) PostJSON(url string, v any) (*http.Response, error) {
 	return c.http.Do(req)
 }
 
-// GetJSON performs a GET and unmarshals the JSON response body into dst.
+// GetJSON performs an authenticated GET request and unmarshals the JSON response body into dst.
 func (c *Client) GetJSON(url string, dst any) error {
 	resp, err := c.Get(url)
 	if err != nil {
@@ -97,7 +125,7 @@ func (c *Client) GetJSON(url string, dst any) error {
 	return json.Unmarshal(body, dst)
 }
 
-// TestConnectivity verifies that the agent can reach the tenant API.
+// TestConnectivity verifies that the agent can successfully reach the tenant API server.
 func (c *Client) TestConnectivity() error {
 	var result struct {
 		Status string `json:"status"`

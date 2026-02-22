@@ -17,7 +17,8 @@ func IsWindowsService() bool { return false }
 // RunService is not supported outside Windows.
 func RunService() error { return fmt.Errorf("Windows service not supported on this platform") }
 
-// RunScheduler starts the task scheduler directly (for development/testing).
+// RunScheduler starts the task scheduler directly in foreground mode (for development/testing).
+// This function blocks until the process is terminated.
 func RunScheduler() {
 	s := buildScheduler()
 	s.Start()
@@ -25,12 +26,22 @@ func RunScheduler() {
 	select {}
 }
 
-func Install() error   { return fmt.Errorf("not supported on this platform") }
+// Install is not supported on non-Windows platforms.
+func Install() error { return fmt.Errorf("not supported on this platform") }
+
+// Uninstall is not supported on non-Windows platforms.
 func Uninstall() error { return fmt.Errorf("not supported on this platform") }
+
+// StartService is not supported on non-Windows platforms.
 func StartService() error { return fmt.Errorf("not supported on this platform") }
-func StopService() error  { return fmt.Errorf("not supported on this platform") }
+
+// StopService is not supported on non-Windows platforms.
+func StopService() error { return fmt.Errorf("not supported on this platform") }
+
+// ServiceStatus is not supported on non-Windows platforms.
 func ServiceStatus() string { return "n/a" }
 
+// buildScheduler constructs and configures the task scheduler with all agent tasks.
 func buildScheduler() *scheduler.Scheduler {
 	s := scheduler.New()
 	s.Add(&scheduler.Task{Name: "heartbeat", Interval: 5 * time.Minute, Fn: tasks.Heartbeat})

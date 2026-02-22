@@ -23,18 +23,19 @@ func IsWindowsService() bool {
 	return ok
 }
 
-// RunService starts the Windows service control dispatcher. This call blocks
-// until the service is stopped by the SCM.
+// RunService starts the Windows Service Control Manager dispatcher.
+// This call blocks until the service is stopped by the SCM.
 func RunService() error {
 	return svc.Run(serviceName, &agentService{})
 }
 
-// RunScheduler starts the task scheduler directly (debug/console mode).
+// RunScheduler starts the task scheduler directly in foreground mode (debug/console mode).
+// This function blocks until the process is terminated.
 func RunScheduler() {
 	s := buildScheduler()
 	s.Start()
 	slog.Info("scheduler running in console mode — press Ctrl+C to stop")
-	// Block forever; the caller handles signals.
+	// Block forever; signal handling is managed by the caller.
 	select {}
 }
 
@@ -51,7 +52,7 @@ func Install() error {
 	}
 	defer m.Disconnect()
 
-	// Check if already installed.
+	// Check if the service is already installed.
 	s, err := m.OpenService(serviceName)
 	if err == nil {
 		s.Close()
@@ -87,7 +88,7 @@ func Uninstall() error {
 	}
 	defer s.Close()
 
-	// Attempt a graceful stop first.
+	// Attempt to stop the service gracefully before deletion.
 	_ = stopService(s)
 
 	if err := s.Delete(); err != nil {
@@ -167,6 +168,8 @@ func ServiceStatus() string {
 	}
 }
 
+// stopService sends a stop signal to the service and waits for it to stop.
+// Polls the service status for up to 10 seconds.
 func stopService(s *mgr.Service) error {
 	_, err := s.Control(svc.Stop)
 	if err != nil {
@@ -183,9 +186,7 @@ func stopService(s *mgr.Service) error {
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Windows service handler
-// ---------------------------------------------------------------------------
+// agentService implements the Windows Service handler interface.
 
 type agentService struct{}
 
@@ -217,10 +218,7 @@ func (a *agentService) Execute(
 	return false, 0
 }
 
-// ---------------------------------------------------------------------------
-// Shared scheduler construction
-// ---------------------------------------------------------------------------
-
+// buildScheduler constructs and configures the task scheduler with all agent tasks.
 func buildScheduler() *scheduler.Scheduler {
 	s := scheduler.New()
 

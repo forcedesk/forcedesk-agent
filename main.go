@@ -19,7 +19,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// First-run: prompt for config values interactively (all platforms).
+	// First-run setup: prompt for configuration values interactively on all platforms.
+	// Skip interactive setup if running as a Windows Service.
 	if !config.Exists() && !svc.IsWindowsService() {
 		cfg, err = config.Setup()
 		if err != nil {
@@ -30,8 +31,9 @@ func main() {
 
 	dataDir := config.DataDir()
 
-	// Console logging whenever running interactively (not as a service).
-	// Non-Windows is always verbose for development convenience.
+	// Configure logging mode based on runtime environment.
+	// Console logging is enabled when running interactively (not as a service).
+	// Non-Windows platforms always use verbose logging for development convenience.
 	nonWindows := runtime.GOOS != "windows"
 	isService := svc.IsWindowsService()
 	consoleMode := nonWindows || !isService
@@ -53,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Hand off to the Windows Service control manager if running as a service.
+	// If running as a Windows Service, hand off control to the Service Control Manager.
 	if isService {
 		if err := svc.RunService(); err != nil {
 			slog.Error("service exited with error", "err", err)
@@ -62,7 +64,7 @@ func main() {
 		return
 	}
 
-	// No arguments: run the scheduler in the foreground.
+	// When invoked without arguments, run the scheduler in the foreground.
 	if len(os.Args) < 2 {
 		slog.Info("running in foreground — press Ctrl+C to stop")
 		svc.RunScheduler()

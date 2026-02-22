@@ -34,8 +34,9 @@ type probeResult struct {
 	Status         string   `json:"status"`
 }
 
-// MonitoringService fetches monitoring probe payloads from the tenant and
-// executes each probe concurrently. Runs every minute.
+// MonitoringService fetches monitoring probe configurations from the tenant server
+// and executes network checks (TCP connectivity and ICMP ping) concurrently.
+// Results are reported back to the tenant. Runs every minute.
 func MonitoringService() {
 	slog.Info("monitoring: starting")
 
@@ -128,7 +129,14 @@ func performTCPCheck(host string, port int) string {
 	return "up"
 }
 
+// performPingCheck executes a single ping check using the system ping command.
+// Returns "up" if the host responds, "down" otherwise.
 func performPingCheck(host string) string {
+	// Validate hostname to prevent command injection.
+	if !isValidHostname(host) {
+		slog.Error("monitoring: invalid hostname in ping check", "host", host)
+		return "down"
+	}
 	// Use ping.exe on Windows; a non-zero exit code means the host is down.
 	cmd := exec.Command("ping", "-n", "1", "-w", "5000", host)
 	if err := cmd.Run(); err != nil {
@@ -137,9 +145,27 @@ func performPingCheck(host string) string {
 	return "up"
 }
 
-// generatePingMetrics sends 5 ICMP pings and returns average RTT (ms) and
-// packet loss (%). Uses the go-ping library directly — no external binary or
-// output parsing required. Either value may be nil on error.
+// isValidHostname validates that a hostname contains only safe characters.
+// Allows alphanumeric characters, dots, hyphens, and IPv6 colons/brackets.
+func isValidHostname(host string) bool {
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	// Allow alphanumeric, dots, hyphens, colons (IPv6), and brackets (IPv6).
+	for _, c := range host {
+		if !((c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '.' || c == '-' || c == ':' || c == '[' || c == ']') {
+			return false
+		}
+	}
+	return true
+}
+
+// generatePingMetrics sends 5 ICMP echo requests and returns average RTT (ms) and packet loss (%).
+// Uses the go-ping library (no external binary or output parsing required).
+// Either return value may be nil on error.
 func generatePingMetrics(host string) (avg *float64, loss *int) {
 	pinger, err := ping.NewPinger(host)
 	if err != nil {
@@ -147,8 +173,8 @@ func generatePingMetrics(host string) (avg *float64, loss *int) {
 		return nil, nil
 	}
 
-	// Windows requires privileged mode (raw ICMP socket).
-	// The service runs as LocalSystem so this is always available.
+	// Windows requires privileged mode for raw ICMP sockets.
+	// The service runs as LocalSystem, which has the required privileges.
 	pinger.SetPrivileged(isWindows())
 	pinger.Count = 5
 	pinger.Timeout = 10 * time.Second

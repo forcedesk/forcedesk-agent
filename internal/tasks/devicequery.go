@@ -11,25 +11,25 @@ import (
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
 
-// allowedCommands is the security whitelist of commands the tenant may request.
+// allowedCommands is a security allowlist that restricts which SSH commands can be executed on remote devices.
 var allowedCommands = map[string]bool{
-	"show hardware":                                            true,
-	"show mac address-table":                                   true,
-	"show log":                                                 true,
-	"show interfaces status":                                   true,
-	"show running-config":                                      true,
-	"show running-config view full":                            true,
-	"log print":                                                true,
-	"export show-sensitive":                                    true,
-	"interface print brief":                                    true,
+	"show hardware":                 true,
+	"show mac address-table":        true,
+	"show log":                      true,
+	"show interfaces status":        true,
+	"show running-config":           true,
+	"show running-config view full": true,
+	"log print":                     true,
+	"export show-sensitive":         true,
+	"interface print brief":         true,
 	"interface ethernet switch host print; interface bridge host print": true,
-	"system routerboard print":                                 true,
+	"system routerboard print": true,
 }
 
 type dqResponse struct {
-	Status   string       `json:"status"`
-	Payloads []dqPayload  `json:"payloads"`
-	Config   dqConfig     `json:"config"`
+	Status   string      `json:"status"`
+	Payloads []dqPayload `json:"payloads"`
+	Config   dqConfig    `json:"config"`
 }
 
 type dqPayload struct {
@@ -55,9 +55,9 @@ type dqConfig struct {
 	LegacySSHOptions string `json:"legacy_ssh_options"`
 }
 
-// DeviceManagerQuery polls for on-demand device query payloads, executes the
-// requested SSH command (against a strict allowlist), and posts the result
-// back to the tenant. The loop runs for 5 minutes before returning.
+// DeviceManagerQuery polls the tenant for on-demand device query requests, executes
+// the requested SSH commands (validated against a strict allowlist), and reports results back.
+// Runs in a polling loop for 5 minutes before returning.
 func DeviceManagerQuery() {
 	slog.Info("devicequery: starting 5-minute polling loop")
 

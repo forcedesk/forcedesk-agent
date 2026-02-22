@@ -13,10 +13,11 @@ type Config struct {
 	Port     int
 	Username string
 	Password string
-	Legacy   bool // enables older KEx algorithms for legacy Cisco devices
+	Legacy   bool // Enables older key exchange algorithms for legacy network devices.
 }
 
-// legacyKex includes weak algorithms required by older Cisco/MikroTik devices.
+// legacyKex contains key exchange algorithms required by older network devices (e.g., Cisco, MikroTik).
+// Includes weaker algorithms like diffie-hellman-group1-sha1 for compatibility.
 var legacyKex = []string{
 	"ecdh-sha2-nistp256",
 	"ecdh-sha2-nistp384",
@@ -26,6 +27,7 @@ var legacyKex = []string{
 	"diffie-hellman-group1-sha1",
 }
 
+// modernKex contains secure key exchange algorithms for modern SSH servers.
 var modernKex = []string{
 	"curve25519-sha256",
 	"ecdh-sha2-nistp256",
@@ -34,8 +36,8 @@ var modernKex = []string{
 	"diffie-hellman-group14-sha256",
 }
 
-// RunCommand opens an SSH session to the target host, runs command, and
-// returns the combined stdout output.
+// RunCommand opens an SSH session to the target host, executes the command, and returns the output.
+// Supports both modern and legacy SSH configurations based on the Legacy flag.
 func RunCommand(cfg Config, command string) (string, error) {
 	port := cfg.Port
 	if port == 0 {
@@ -83,8 +85,8 @@ func RunCommand(cfg Config, command string) (string, error) {
 
 	out, err := session.Output(command)
 	if err != nil {
-		// Some devices close the connection after sending output; treat
-		// non-empty output with an error as partial success.
+		// Some devices close the connection immediately after sending output.
+		// Treat non-empty output with an error as successful execution.
 		if len(out) > 0 {
 			return string(out), nil
 		}
