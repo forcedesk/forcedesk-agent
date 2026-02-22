@@ -4,13 +4,13 @@ LDFLAGS  = -s -w
 
 .PHONY: build build-debug run-debug resource install-tools clean
 
-## install-tools: install build-time tools (goversioninfo)
+## install-tools: install build-time tools (winres)
 install-tools:
-	go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+	go install github.com/tc-hib/go-winres@latest
 
-## resource: generate resource.syso (embeds icon + version info into the .exe)
+## resource: generate rsrc_windows_amd64.syso (embeds icon + version info into the .exe)
 resource:
-	goversioninfo -o resource.syso
+	$(shell go env GOPATH)/bin/go-winres make --arch amd64
 
 ## build: compile the production Windows binary (stripped, with embedded icon)
 build: resource
@@ -30,4 +30,4 @@ tidy:
 
 ## clean: remove compiled binaries and generated resources
 clean:
-	rm -f $(BINARY) resource.syso
+	rm -f $(BINARY) rsrc_windows_amd64.syso

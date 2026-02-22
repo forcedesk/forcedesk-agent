@@ -46,6 +46,7 @@ func (c *Client) applyHeaders(req *http.Request) {
 	cfg := config.Get()
 	req.Header.Set("Authorization", "Bearer "+cfg.Tenant.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "ForceDeskAgent\\v"+AgentVersion)
 	req.Header.Set("x-forcedesk-agent", cfg.Tenant.UUID)
 	req.Header.Set("x-forcedesk-agentversion", AgentVersion)
 	req.Header.Set("Accept", "application/json")
