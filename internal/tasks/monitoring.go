@@ -34,7 +34,7 @@ type probeResult struct {
 	Status         string   `json:"status"`
 }
 
-// MonitoringService fetches monitoring probe configurations from the tenant server
+// MonitoringService fetches monitoring probe configurations from the ForceDesk server
 // and executes network checks (TCP connectivity and ICMP ping) concurrently.
 // Results are reported back to the tenant. Runs every minute.
 func MonitoringService() {

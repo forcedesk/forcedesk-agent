@@ -11,7 +11,7 @@ type heartbeatResponse struct {
 	Message string `json:"message"`
 }
 
-// Heartbeat confirms bidirectional connectivity between the agent and tenant server.
+// Heartbeat confirms bidirectional connectivity between the agent and ForceDesk server.
 // Runs every 5 minutes to verify the agent is acknowledged by the tenant.
 func Heartbeat() {
 	slog.Info("heartbeat: starting")

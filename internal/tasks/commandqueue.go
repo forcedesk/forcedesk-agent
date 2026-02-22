@@ -15,7 +15,7 @@ type commandPayload struct {
 	Process bool `json:"process"`
 }
 
-// CommandQueueService polls the tenant server for pending commands and executes them.
+// CommandQueueService polls the ForceDesk server for pending commands and executes them.
 // Supports commands like forcing a Papercut sync or triggering device manager queries.
 // Runs every minute.
 func CommandQueueService() {

@@ -10,6 +10,7 @@ config.toml
 # IDE
 .idea/
 .vscode/
+.claude/
 .fleet/
 
 # macOS
