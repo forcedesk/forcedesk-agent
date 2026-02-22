@@ -15,11 +15,12 @@ DisableWelcomePage=no
 OutputBaseFilename=forcedesk-agent-setup
 OutputDir=.
 SetupIconFile=forcedesk-icon.ico
+LicenseFile=license.txt
 WizardImageFile=installer-sidebar.bmp
 WizardSmallImageFile=installer-header.bmp
 Compression=lzma
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dark polar includetitlebar
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -58,6 +59,9 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "uninstall"; \
 
 [Code]
 
+const
+  ServiceName = 'ForceDeskAgent';
+
 { -----------------------------------------------------------------------
   Validate that config.toml is present next to the installer before
   allowing setup to proceed. Without it the agent cannot function and
@@ -79,12 +83,16 @@ begin
 end;
 
 { -----------------------------------------------------------------------
-  Copy config.toml into the data directory.
+  Copy config.toml into the data directory (ssInstall), then verify
+  the Windows service is running once all [Run] entries have completed
+  (ssDone). If the service is not yet running, attempt one final start
+  via sc.exe and warn the user if it still fails.
   ----------------------------------------------------------------------- }
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SrcConfig: string;
   DestDir:   string;
+  ExitCode:  Integer;
 begin
   if CurStep = ssInstall then
   begin
@@ -98,6 +106,24 @@ begin
     if not FileCopy(SrcConfig, DestDir + '\config.toml', False) then
       MsgBox('Warning: could not copy config.toml to ' + DestDir + '.' + #13#10 +
              'The service may not start correctly.', mbError, MB_OK);
+  end;
+
+  if CurStep = ssDone then
+  begin
+    { sc query returns 0 only when the service is RUNNING }
+    if not Exec('sc.exe', 'query ' + ServiceName, '', SW_HIDE,
+                ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then
+    begin
+      { One more attempt to start the service }
+      Exec('sc.exe', 'start ' + ServiceName, '', SW_HIDE,
+           ewWaitUntilTerminated, ExitCode);
+
+      if ExitCode <> 0 then
+        MsgBox(
+          'The ForceDesk Agent service was installed but could not be started.' + #13#10#13#10 +
+          'You can start it manually from the Windows Services console (services.msc).',
+          mbError, MB_OK);
+    end;
   end;
 end;
 
