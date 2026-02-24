@@ -34,6 +34,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "forcedesk-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "forcedesk-icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "print_label.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "fping.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cygwin1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Run]
 ; Install the Windows Service (auto-start, LocalSystem).
