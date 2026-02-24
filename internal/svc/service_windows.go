@@ -252,6 +252,11 @@ func buildScheduler() *scheduler.Scheduler {
 		Interval: 30 * time.Minute,
 		Fn:       tasks.PapercutService,
 	})
+	s.Add(&scheduler.Task{
+		Name:     "kiosklabel",
+		Interval: 10 * time.Second,
+		Fn:       tasks.KioskLabelService,
+	})
 
 	return s
 }
