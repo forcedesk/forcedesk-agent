@@ -10,7 +10,7 @@ If bRet <> False Then
     doc.GetObject("BARCODE").Text = WScript.Arguments(3)
     doc.GetObject("DATE").Text = WScript.Arguments(4)
 
-    doc.StartPrint "LabelPrinter", 0
+    doc.StartPrint "LabelPrinter", &H4010000  ' bpoQuality + bpoCutAtEnd
     doc.PrintOut 1, 0
     doc.EndPrint
     doc.Close
