@@ -11,9 +11,8 @@ import (
 )
 
 type kioskLabelsResponse struct {
-	Success   bool         `json:"success"`
-	LabelFile string       `json:"label_file"`
-	Labels    []kioskLabel `json:"labels"`
+	Success bool         `json:"success"`
+	Labels  []kioskLabel `json:"labels"`
 }
 
 type kioskLabel struct {
@@ -58,7 +57,7 @@ func KioskLabelService() {
 		return
 	}
 
-	labelFile := filepath.Join(exeDir, pending.LabelFile)
+	labelFile := filepath.Join(exeDir, "assets", "template.lbx")
 	vbsFile := filepath.Join(exeDir, "print_label.vbs")
 
 	for _, label := range pending.Labels {
