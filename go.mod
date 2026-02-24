@@ -1,8 +1,9 @@
 module github.com/forcedesk/forcedesk-agent
 
-go 1.22.0
+go 1.24
 
 require (
+	github.com/Azure/go-ntlmssp v0.1.0
 	github.com/BurntSushi/toml v1.4.0
 	github.com/go-ping/ping v1.2.0
 	golang.org/x/crypto v0.31.0

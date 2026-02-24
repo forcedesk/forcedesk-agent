@@ -45,6 +45,26 @@ func (p *Papercut) GetAPIKey() string {
 	return p.APIKey
 }
 
+type EduStar struct {
+	Enabled      bool   `toml:"enabled"`
+	Username     string `toml:"username"`
+	Password     string `toml:"password"`
+	SchoolCode   string `toml:"school_code"`
+	CRTGroupDN   string `toml:"crt_group_dn"`
+	CRTGroupName string `toml:"crt_group_name"`
+	// AuthMode controls authentication: "ntlm", "form", or "" (auto — tries NTLM then form).
+	AuthMode    string `toml:"auth_mode"`
+	passwordSec *secure.String
+}
+
+// GetPassword returns the STMC password from secure storage, or falls back to the plain text field.
+func (e *EduStar) GetPassword() string {
+	if e.passwordSec != nil && !e.passwordSec.IsEmpty() {
+		return e.passwordSec.String()
+	}
+	return e.Password
+}
+
 type DeviceManager struct {
 	LegacySSHOptions string `toml:"legacy_ssh_options"`
 }
@@ -56,6 +76,7 @@ type Logging struct {
 type Config struct {
 	Tenant        Tenant        `toml:"tenant"`
 	Papercut      Papercut      `toml:"papercut"`
+	EduStar       EduStar       `toml:"edustar"`
 	DeviceManager DeviceManager `toml:"device_manager"`
 	Logging       Logging       `toml:"logging"`
 }
@@ -112,6 +133,10 @@ func Load() (*Config, error) {
 		cfg.Papercut.apiKeySec = secure.NewString(cfg.Papercut.APIKey)
 		cfg.Papercut.APIKey = ""
 	}
+	if cfg.EduStar.Password != "" {
+		cfg.EduStar.passwordSec = secure.NewString(cfg.EduStar.Password)
+		cfg.EduStar.Password = ""
+	}
 
 	mu.Lock()
 	instance = cfg
@@ -160,6 +185,21 @@ func Setup() (*Config, error) {
 		pcAPIKey := promptPassword(r, "Papercut API Key")
 		cfg.Papercut.APIKey = pcAPIKey
 		cfg.Papercut.apiKeySec = secure.NewString(pcAPIKey)
+	}
+
+	// Prompt for optional EduStar STMC integration.
+	fmt.Println()
+	fmt.Println("[EduStar STMC]")
+	if promptBool(r, "Enable EduStar STMC integration?", false) {
+		cfg.EduStar.Enabled = true
+		cfg.EduStar.Username = promptRequired(r, "STMC Username")
+		esPwd := promptPassword(r, "STMC Password")
+		cfg.EduStar.Password = esPwd
+		cfg.EduStar.passwordSec = secure.NewString(esPwd)
+		cfg.EduStar.SchoolCode = promptRequired(r, "School Code")
+		cfg.EduStar.CRTGroupDN = promptDefault(r, "CRT Group DN (optional)", "")
+		cfg.EduStar.CRTGroupName = promptDefault(r, "CRT Group Name (optional)", "")
+		cfg.EduStar.AuthMode = promptDefault(r, "Auth Mode (ntlm/form/auto)", "")
 	}
 
 	// Write configuration to disk.

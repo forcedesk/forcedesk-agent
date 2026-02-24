@@ -252,6 +252,11 @@ func buildScheduler() *scheduler.Scheduler {
 		Interval: 30 * time.Minute,
 		Fn:       tasks.PapercutService,
 	})
+	//s.Add(&scheduler.Task{
+	//	Name:     "edustar",
+	//	Interval: 4 * time.Hour,
+	//	Fn:       tasks.EduStarService,
+	//})
 	s.Add(&scheduler.Task{
 		Name:     "kiosklabel",
 		Interval: 10 * time.Second,

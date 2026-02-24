@@ -50,5 +50,6 @@ func buildScheduler() *scheduler.Scheduler {
 	s.Add(&scheduler.Task{Name: "commandqueue", Interval: 1 * time.Minute, Fn: tasks.CommandQueueService})
 	s.Add(&scheduler.Task{Name: "devicequery", Interval: 5 * time.Second, Fn: tasks.DeviceManagerQuery})
 	s.Add(&scheduler.Task{Name: "papercut", Interval: 30 * time.Minute, Fn: tasks.PapercutService})
+	//s.Add(&scheduler.Task{Name: "edustar", Interval: 4 * time.Hour, Fn: tasks.EduStarService})
 	return s
 }

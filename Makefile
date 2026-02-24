@@ -2,7 +2,7 @@ BINARY   = forcedesk-agent.exe
 GOFLAGS  = -mod=mod
 LDFLAGS  = -s -w
 
-.PHONY: build build-debug run-debug resource install-tools clean
+.PHONY: build build-local build-debug run-debug resource install-tools tidy clean
 
 ## install-tools: install build-time tools (winres)
 install-tools:
@@ -15,6 +15,10 @@ resource:
 ## build: compile the production Windows binary (stripped, with embedded icon)
 build: resource
 	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -ldflags="$(LDFLAGS)" -o $(BINARY) .
+
+## build-local: compile a native binary for the current OS (macOS/Linux, for testing)
+build-local:
+	go build $(GOFLAGS) -o forcedesk-agent .
 
 ## build-debug: compile without stripping (keeps symbols for debugging)
 build-debug: resource
@@ -30,4 +34,4 @@ tidy:
 
 ## clean: remove compiled binaries and generated resources
 clean:
-	rm -f $(BINARY) rsrc_windows_amd64.syso
+	rm -f $(BINARY) forcedesk-agent rsrc_windows_amd64.syso

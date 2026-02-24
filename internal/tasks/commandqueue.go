@@ -12,7 +12,8 @@ type commandQueueItem struct {
 }
 
 type commandPayload struct {
-	Process bool `json:"process"`
+	Process bool   `json:"process"`
+	Action  string `json:"action"`
 }
 
 // CommandQueueService polls the ForceDesk server for pending commands and executes them.
@@ -50,6 +51,12 @@ func CommandQueueService() {
 		case "force-devicemanager-query":
 			slog.Info("commandqueue: triggering device manager query loop")
 			go DeviceManagerQuery()
+
+		case "run-edustar":
+			if item.PayloadData.Process {
+				slog.Info("commandqueue: triggering edustar command", "action", item.PayloadData.Action)
+				go EduStarCommand(item.PayloadData.Action)
+			}
 
 		default:
 			slog.Warn("commandqueue: unknown command type", "type", item.Type)
