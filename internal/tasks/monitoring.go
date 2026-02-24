@@ -1,15 +1,18 @@
 package tasks
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
-
-	ping "github.com/go-ping/ping"
 
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -34,9 +37,68 @@ type probeResult struct {
 	Status         string   `json:"status"`
 }
 
-// MonitoringService fetches monitoring probe configurations from the ForceDesk server
-// and executes network checks (TCP connectivity and ICMP ping) concurrently.
-// Results are reported back to the tenant. Runs every minute.
+// fpingRe parses fping's per-host summary line:
+// "host : xmt/rcv/%loss = 3/3/0%, min/avg/max = 0.14/0.15/0.16"
+// The RTT group is absent when no packets were received.
+var fpingRe = regexp.MustCompile(`xmt/rcv/%loss = \d+/\d+/(\d+)%(?:, min/avg/max = [\d.]+/([\d.]+)/[\d.]+)?`)
+
+// fpingPath returns the absolute path to fping.exe, expected to be in the
+// same directory as the running executable.
+func fpingPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "fping.exe"
+	}
+	return filepath.Join(filepath.Dir(exe), "fping.exe")
+}
+
+// generatePingMetrics runs fping.exe and returns average RTT (ms) and packet
+// loss percentage for the given host. Both are nil on error or if fping cannot
+// be found. avg is nil when no packets were received (host unreachable).
+func generatePingMetrics(host string) (avg *float64, loss *int) {
+	if !isValidHostname(host) {
+		slog.Error("monitoring: invalid hostname for ping metrics", "host", host)
+		return nil, nil
+	}
+
+	// fping writes its per-host summary to stderr regardless of exit code.
+	// A non-zero exit simply means some/all hosts were unreachable.
+	cmd := exec.Command(fpingPath(), "-c", "3", "-q", host)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Run() //nolint:errcheck
+
+	output := stderr.String()
+	slog.Debug("monitoring: fping output", "host", host, "output", output)
+
+	m := fpingRe.FindStringSubmatch(output)
+	if m == nil {
+		slog.Error("monitoring: failed to parse fping output", "host", host, "output", output)
+		return nil, nil
+	}
+
+	lossVal, err := strconv.Atoi(m[1])
+	if err != nil {
+		return nil, nil
+	}
+	loss = &lossVal
+
+	// m[2] is the avg RTT field — only present when packets were received.
+	if m[2] != "" {
+		avgVal, err := strconv.ParseFloat(m[2], 64)
+		if err == nil {
+			avg = &avgVal
+		}
+	}
+
+	return avg, loss
+}
+
+// MonitoringService fetches monitoring probe configurations from the ForceDesk
+// server and runs all checks concurrently. fping.exe handles ping metrics as a
+// separate process per probe, so goroutines have no ICMP socket contention.
+// All results are combined and reported back to the tenant in a single payload.
+// Runs every minute.
 func MonitoringService() {
 	slog.Info("monitoring: starting")
 
@@ -62,64 +124,76 @@ func MonitoringService() {
 		return
 	}
 
-	var wg sync.WaitGroup
-	dispatched := 0
-
+	var probes []probePayload
 	for _, item := range items {
-		slog.Debug("monitoring: dispatching probes", "probe_count", len(item.PayloadData))
-		for _, probe := range item.PayloadData {
-			wg.Add(1)
-			dispatched++
-			go func(p probePayload) {
-				defer wg.Done()
-				runProbe(client, p)
-			}(probe)
-		}
+		probes = append(probes, item.PayloadData...)
+	}
+	slog.Debug("monitoring: total probes", "count", len(probes))
+
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		results []probeResult
+	)
+
+	for _, p := range probes {
+		wg.Add(1)
+		go func(probe probePayload) {
+			defer wg.Done()
+			slog.Debug("monitoring: running probe", "probe_id", probe.ProbeID, "host", probe.Host, "check_type", probe.CheckType, "port", probe.Port)
+
+			avg, loss := generatePingMetrics(probe.Host)
+			slog.Info("monitoring: ping metrics", "probe_id", probe.ProbeID, "ping_data", avg, "packet_loss_data", loss)
+
+			var status string
+			if avg == nil {
+				status = "down"
+			} else {
+				switch probe.CheckType {
+				case "tcp":
+					status = performTCPCheck(probe.Host, probe.Port)
+				case "ping":
+					status = performPingCheck(probe.Host)
+				default:
+					slog.Error("monitoring: unknown check type", "probe_id", probe.ProbeID, "check_type", probe.CheckType)
+					status = "down"
+				}
+			}
+
+			slog.Debug("monitoring: probe result", "probe_id", probe.ProbeID, "host", probe.Host, "status", status)
+
+			mu.Lock()
+			results = append(results, probeResult{
+				ID:             probe.ProbeID,
+				PingData:       avg,
+				PacketLossData: loss,
+				Status:         status,
+			})
+			mu.Unlock()
+		}(p)
 	}
 
 	wg.Wait()
-	slog.Info("monitoring: completed", "dispatched", dispatched)
-}
+	slog.Info("monitoring: probes completed", "total", len(probes), "results", len(results))
 
-func runProbe(client *tenant.Client, p probePayload) {
-	slog.Debug("monitoring: running probe", "probe_id", p.ProbeID, "host", p.Host, "check_type", p.CheckType, "port", p.Port)
-
-	ping, loss := generatePingMetrics(p.Host)
-	slog.Info("monitoring: ping metrics", "probe_id", p.ProbeID, "ping_data", ping, "packet_loss_data", loss)
-
-	var status string
-	switch p.CheckType {
-	case "tcp":
-		status = performTCPCheck(p.Host, p.Port)
-	case "ping":
-		status = performPingCheck(p.Host)
-	default:
-		slog.Error("monitoring: unknown check type", "probe_id", p.ProbeID, "check_type", p.CheckType)
+	if len(results) == 0 {
+		slog.Info("monitoring: no results to send")
 		return
 	}
 
-	slog.Debug("monitoring: probe result", "probe_id", p.ProbeID, "host", p.Host, "status", status)
-
-	result := probeResult{
-		ID:             p.ProbeID,
-		PingData:       ping,
-		PacketLossData: loss,
-		Status:         status,
-	}
-
-	resp, err := client.PostJSON(tenant.URL("/api/agent/monitoring/response"), result)
+	resp, err := client.PostJSON(tenant.URL("/api/agent/monitoring/response-bulk"), results)
 	if err != nil {
-		slog.Error("monitoring: failed to send probe result", "probe_id", p.ProbeID, "err", err)
+		slog.Error("monitoring: failed to send combined results", "err", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	slog.Debug("monitoring: POST response", "probe_id", p.ProbeID, "http_status", resp.StatusCode)
-	slog.Info("monitoring: probe result sent", "probe_id", p.ProbeID, "status", status)
+	slog.Debug("monitoring: POST response", "http_status", resp.StatusCode)
+	slog.Info("monitoring: combined results sent", "count", len(results))
 }
 
 func performTCPCheck(host string, port int) string {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		slog.Info("monitoring: TCP check down", "host", host, "port", port, "err", err)
@@ -132,7 +206,6 @@ func performTCPCheck(host string, port int) string {
 // performPingCheck executes a single ping check using the system ping command.
 // Returns "up" if the host responds, "down" otherwise.
 func performPingCheck(host string) string {
-	// Validate hostname to prevent command injection.
 	if !isValidHostname(host) {
 		slog.Error("monitoring: invalid hostname in ping check", "host", host)
 		return "down"
@@ -151,7 +224,6 @@ func isValidHostname(host string) bool {
 	if host == "" || len(host) > 253 {
 		return false
 	}
-	// Allow alphanumeric, dots, hyphens, colons (IPv6), and brackets (IPv6).
 	for _, c := range host {
 		if !((c >= 'a' && c <= 'z') ||
 			(c >= 'A' && c <= 'Z') ||
@@ -161,44 +233,4 @@ func isValidHostname(host string) bool {
 		}
 	}
 	return true
-}
-
-// generatePingMetrics sends 5 ICMP echo requests and returns average RTT (ms) and packet loss (%).
-// Uses the go-ping library (no external binary or output parsing required).
-// Either return value may be nil on error.
-func generatePingMetrics(host string) (avg *float64, loss *int) {
-	pinger, err := ping.NewPinger(host)
-	if err != nil {
-		slog.Error("monitoring: failed to create pinger", "host", host, "err", err)
-		return nil, nil
-	}
-
-	// Windows requires privileged mode for raw ICMP sockets.
-	// The service runs as LocalSystem, which has the required privileges.
-	pinger.SetPrivileged(isWindows())
-	pinger.Count = 5
-	pinger.Timeout = 10 * time.Second
-
-	if err := pinger.Run(); err != nil {
-		slog.Error("monitoring: ping failed", "host", host, "err", err)
-		return nil, nil
-	}
-
-	stats := pinger.Statistics()
-	slog.Debug("monitoring: ping stats", "host", host,
-		"sent", stats.PacketsSent,
-		"recv", stats.PacketsRecv,
-		"loss_pct", stats.PacketLoss,
-		"avg_rtt", stats.AvgRtt,
-	)
-
-	avgMS := float64(stats.AvgRtt) / float64(time.Millisecond)
-	lossInt := int(stats.PacketLoss)
-
-	if stats.PacketsRecv > 0 {
-		avg = &avgMS
-	}
-	loss = &lossInt
-
-	return avg, loss
 }
