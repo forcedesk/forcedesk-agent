@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,11 +16,13 @@ import (
 )
 
 type Tenant struct {
-	URL       string `toml:"url"`
-	APIKey    string `toml:"api_key"`
-	UUID      string `toml:"uuid"`
-	VerifySSL bool   `toml:"verify_ssl"`
-	apiKeySec *secure.String
+	URL           string `toml:"url"`
+	APIKey        string `toml:"api_key"`
+	UUID          string `toml:"uuid"`
+	VerifySSL     bool   `toml:"verify_ssl"`
+	EncryptionKey string `toml:"encryption_key"` // hex-encoded 32-byte ChaCha20-Poly1305 key, set by server
+	apiKeySec     *secure.String
+	encKeySec     *secure.String
 }
 
 // GetAPIKey returns the API key from secure storage, or falls back to the plain text field.
@@ -28,6 +31,28 @@ func (t *Tenant) GetAPIKey() string {
 		return t.apiKeySec.String()
 	}
 	return t.APIKey
+}
+
+// GetEncryptionKey decodes and returns the 32-byte ChaCha20-Poly1305 key from secure storage.
+// Returns an error if the key is not configured or is not a valid 32-byte hex string.
+func (t *Tenant) GetEncryptionKey() ([]byte, error) {
+	var raw string
+	if t.encKeySec != nil && !t.encKeySec.IsEmpty() {
+		raw = t.encKeySec.String()
+	} else {
+		raw = t.EncryptionKey
+	}
+	if raw == "" {
+		return nil, fmt.Errorf("encryption_key not set in [tenant] config")
+	}
+	key, err := hex.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("encryption_key is not valid hex: %w", err)
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("encryption_key must be 32 bytes (64 hex chars), got %d bytes", len(key))
+	}
+	return key, nil
 }
 
 type Papercut struct {
@@ -126,8 +151,11 @@ func Load() (*Config, error) {
 	// Convert sensitive strings to secure storage.
 	if cfg.Tenant.APIKey != "" {
 		cfg.Tenant.apiKeySec = secure.NewString(cfg.Tenant.APIKey)
-		// Zero out the plain text version.
 		cfg.Tenant.APIKey = ""
+	}
+	if cfg.Tenant.EncryptionKey != "" {
+		cfg.Tenant.encKeySec = secure.NewString(cfg.Tenant.EncryptionKey)
+		cfg.Tenant.EncryptionKey = ""
 	}
 	if cfg.Papercut.APIKey != "" {
 		cfg.Papercut.apiKeySec = secure.NewString(cfg.Papercut.APIKey)

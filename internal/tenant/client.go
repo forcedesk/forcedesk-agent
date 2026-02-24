@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/crypto/chacha20poly1305"
+
 	"github.com/forcedesk/forcedesk-agent/internal/config"
 	"github.com/forcedesk/forcedesk-agent/internal/ratelimit"
 )
@@ -123,6 +125,44 @@ func (c *Client) GetJSON(url string, dst any) error {
 		return err
 	}
 	return json.Unmarshal(body, dst)
+}
+
+// GetEncryptedJSON performs an authenticated GET request whose response body is encrypted
+// with ChaCha20-Poly1305 using the provided 32-byte mutual key.
+// Expected wire format: nonce (12 bytes) || ciphertext+tag — the decrypted payload is JSON
+// which is unmarshalled into dst.
+func (c *Client) GetEncryptedJSON(url string, dst any, key []byte) error {
+	resp, err := c.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read encrypted response: %w", err)
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return fmt.Errorf("create cipher: %w", err)
+	}
+
+	ns := aead.NonceSize()
+	if len(body) < ns {
+		return fmt.Errorf("encrypted response too short (%d bytes)", len(body))
+	}
+
+	plaintext, err := aead.Open(nil, body[:ns], body[ns:], nil)
+	if err != nil {
+		return fmt.Errorf("decrypt response: %w", err)
+	}
+
+	return json.Unmarshal(plaintext, dst)
 }
 
 // TestConnectivity verifies that the agent can successfully reach the tenant API server.

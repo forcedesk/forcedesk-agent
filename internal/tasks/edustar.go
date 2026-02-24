@@ -58,9 +58,15 @@ func resolveConfig(tc *tenant.Client) (*eduStarConfig, error) {
 }
 
 // fetchEduStarConfig retrieves STMC integration config from the tenant API.
+// The response is decrypted using the ChaCha20-Poly1305 key from [tenant] encryption_key in config.toml.
 func fetchEduStarConfig(tc *tenant.Client) (*eduStarConfig, error) {
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		return nil, fmt.Errorf("encryption key: %w", err)
+	}
+
 	var cfg eduStarConfig
-	if err := tc.GetJSON(tenant.URL("/api/agent/edustar/config"), &cfg); err != nil {
+	if err := tc.GetEncryptedJSON(tenant.URL("/api/agent/edustar-config"), &cfg, key); err != nil {
 		return nil, fmt.Errorf("fetch edustar config: %w", err)
 	}
 	if cfg.Username == "" || cfg.Password == "" {
