@@ -458,27 +458,115 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		}
 		fmt.Println("Member removed successfully.")
 
-	// ── Sync / service operations (these post data back to the tenant) ────────
+	// ── Sync / service operations (fetch from STMC, POST to tenant) ─────────
 
 	case "populate-student-accounts":
-		populateStudents(tenant.New(), stmc, cfg)
-		fmt.Println("Done.")
+		fmt.Printf("Fetching students for school %s...\n", cfg.SchoolCode)
+		students, err := stmc.GetStudents(cfg.SchoolCode)
+		if err != nil {
+			cliError(fmt.Errorf("GetStudents: %w", err))
+		}
+		fmt.Printf("Fetched %d students. Posting to tenant...\n", len(students))
+		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/students"), students)
+		if err != nil {
+			cliError(fmt.Errorf("post students: %w", err))
+		}
+		resp.Body.Close()
+		fmt.Printf("Done. HTTP %d\n", resp.StatusCode)
 
 	case "populate-staff-accounts":
-		populateStaff(tenant.New(), stmc, cfg)
-		fmt.Println("Done.")
+		fmt.Printf("Fetching staff for school %s...\n", cfg.SchoolCode)
+		staff, err := stmc.GetStaff(cfg.SchoolCode)
+		if err != nil {
+			cliError(fmt.Errorf("GetStaff: %w", err))
+		}
+		fmt.Printf("Fetched %d staff. Posting to tenant...\n", len(staff))
+		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/staff"), staff)
+		if err != nil {
+			cliError(fmt.Errorf("post staff: %w", err))
+		}
+		resp.Body.Close()
+		fmt.Printf("Done. HTTP %d\n", resp.StatusCode)
 
 	case "populate-crt-accounts":
-		populateCRT(tenant.New(), stmc, cfg)
-		fmt.Println("Done.")
+		requireFlag("--group-dn", cfg.CRTGroupDN)
+		requireFlag("--group-name", cfg.CRTGroupName)
+		fmt.Printf("Fetching CRT group %q...\n", cfg.CRTGroupName)
+		members, err := stmc.GetGroup(cfg.SchoolCode, cfg.CRTGroupName, cfg.CRTGroupDN)
+		if err != nil {
+			cliError(fmt.Errorf("GetGroup: %w", err))
+		}
+		fmt.Printf("Fetched %d members. Posting to tenant...\n", len(members))
+		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/crt-accounts"), members)
+		if err != nil {
+			cliError(fmt.Errorf("post CRT accounts: %w", err))
+		}
+		resp.Body.Close()
+		fmt.Printf("Done. HTTP %d\n", resp.StatusCode)
 
 	case "expire-crt-accounts":
-		expireCRT(tenant.New(), stmc, cfg)
-		fmt.Println("Done.")
+		tc := tenant.New()
+		accounts, err := fetchCRTAccounts(tc)
+		if err != nil {
+			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
+		}
+		fmt.Printf("Expiring %d CRT accounts...\n", len(accounts))
+		for _, acc := range accounts {
+			if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+				fmt.Fprintf(os.Stderr, "  disable %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
+				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+			}
+			fmt.Printf("  expired: %s\n", acc.Login)
+		}
+		fmt.Printf("Done. %d accounts expired.\n", len(accounts))
 
 	case "enable-crt-accounts":
-		enableCRT(tenant.New(), stmc, cfg)
-		fmt.Println("Done.")
+		tc := tenant.New()
+		accounts, err := fetchCRTAccounts(tc)
+		if err != nil {
+			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
+		}
+		fmt.Printf("Enabling %d CRT accounts...\n", len(accounts))
+
+		type crtPassword struct {
+			Login    string `json:"login"`
+			LdapDN   string `json:"ldap_dn"`
+			Password string `json:"password"`
+		}
+		var updated []crtPassword
+
+		for _, acc := range accounts {
+			if err := stmc.EnableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+				fmt.Fprintf(os.Stderr, "  enable %s: %v\n", acc.Login, err)
+				continue
+			}
+			pwd, err := generatePassword()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  generate password %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  set password %s: %v\n", acc.Login, err)
+				continue
+			}
+			fmt.Printf("  enabled: %s\n", acc.Login)
+			updated = append(updated, crtPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
+		}
+
+		if len(updated) > 0 {
+			fmt.Printf("Posting %d updated passwords to tenant...\n", len(updated))
+			resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/crt-passwords"), updated)
+			if err != nil {
+				cliError(fmt.Errorf("post CRT passwords: %w", err))
+			}
+			resp.Body.Close()
+			fmt.Printf("Done. HTTP %d — %d accounts enabled.\n", resp.StatusCode, len(updated))
+		} else {
+			fmt.Println("No accounts were updated.")
+		}
 
 	default:
 		fmt.Fprintf(os.Stderr, "edustar: unknown action %q\n", action)
