@@ -124,6 +124,7 @@ func main() {
 		groupName := fs.String("group-name", "", "Group name (for group)")
 		memberDN := fs.String("member-dn", "", "Member DN (for add-to-group, remove-from-group)")
 		newPassword := fs.String("new-password", "", "New password (for set-password)")
+		dump := fs.Bool("dump", false, "Print the JSON payload instead of sending it to the tenant")
 		if err := fs.Parse(os.Args[3:]); err != nil {
 			os.Exit(1)
 		}
@@ -135,6 +136,7 @@ func main() {
 			GroupName:   *groupName,
 			MemberDN:    *memberDN,
 			NewPassword: *newPassword,
+			Dump:        *dump,
 		})
 
 	default:
@@ -186,4 +188,5 @@ func printEduStarUsage(exe string) {
 	fmt.Fprintln(os.Stderr, "  --group-name <name>  Group name")
 	fmt.Fprintln(os.Stderr, "  --member-dn <dn>     Member distinguished name")
 	fmt.Fprintln(os.Stderr, "  --new-password <pw>  New password for set-password")
+	fmt.Fprintln(os.Stderr, "  --dump               Print the JSON payload instead of sending to tenant")
 }

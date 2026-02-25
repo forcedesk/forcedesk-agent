@@ -72,6 +72,7 @@ type EduStarCLIOpts struct {
 	GroupName   string // group name for group operations
 	MemberDN    string // member DN for add/remove-from-group
 	NewPassword string // new password for set-password
+	Dump        bool   // print JSON payload to stdout instead of sending to tenant
 }
 
 // resolveConfig returns EduStar config from local config.toml when enabled,
@@ -492,6 +493,10 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		if err != nil {
 			cliError(fmt.Errorf("GetStudents: %w", err))
 		}
+		if opts.Dump {
+			cliPrint(students, nil)
+			break
+		}
 		fmt.Printf("Fetched %d students. Posting to tenant...\n", len(students))
 		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/students"), students)
 		if err != nil {
@@ -505,6 +510,10 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		staff, err := stmc.GetStaff(cfg.SchoolCode)
 		if err != nil {
 			cliError(fmt.Errorf("GetStaff: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(staff, nil)
+			break
 		}
 		fmt.Printf("Fetched %d staff. Posting to tenant...\n", len(staff))
 		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/staff"), staff)
@@ -522,6 +531,10 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		if err != nil {
 			cliError(fmt.Errorf("GetGroup: %w", err))
 		}
+		if opts.Dump {
+			cliPrint(members, nil)
+			break
+		}
 		fmt.Printf("Fetched %d members. Posting to tenant...\n", len(members))
 		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/crt-accounts"), members)
 		if err != nil {
@@ -534,6 +547,10 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		accounts, err := fetchCRTAccounts(tc)
 		if err != nil {
 			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(accounts, nil)
+			break
 		}
 		fmt.Printf("Expiring %d CRT accounts...\n", len(accounts))
 		for _, acc := range accounts {
@@ -552,6 +569,10 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		accounts, err := fetchCRTAccounts(tc)
 		if err != nil {
 			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(accounts, nil)
+			break
 		}
 		fmt.Printf("Enabling %d CRT accounts...\n", len(accounts))
 

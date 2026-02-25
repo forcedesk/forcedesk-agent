@@ -87,6 +87,17 @@ func getOrCreateEncryptionKey(dataDir string) ([]byte, error) {
 // migrate creates the required database tables if they don't already exist.
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS probe_history (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			probe_id    INTEGER NOT NULL,
+			ts          INTEGER NOT NULL,
+			avg_ms      REAL,
+			min_ms      REAL,
+			max_ms      REAL,
+			packet_loss INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_probe_history ON probe_history (probe_id, ts DESC);
+
 		CREATE TABLE IF NOT EXISTS students (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			login      TEXT,

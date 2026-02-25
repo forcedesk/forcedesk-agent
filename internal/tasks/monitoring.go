@@ -14,6 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forcedesk/forcedesk-agent/internal/config"
+	"github.com/forcedesk/forcedesk-agent/internal/db"
+	"github.com/forcedesk/forcedesk-agent/internal/graph"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
 
@@ -39,8 +42,8 @@ type probeResult struct {
 
 // fpingRe parses fping's per-host summary line:
 // "host : xmt/rcv/%loss = 3/3/0%, min/avg/max = 0.14/0.15/0.16"
-// The RTT group is absent when no packets were received.
-var fpingRe = regexp.MustCompile(`xmt/rcv/%loss = \d+/\d+/(\d+)%(?:, min/avg/max = [\d.]+/([\d.]+)/[\d.]+)?`)
+// Groups: 1=loss%, 2=min, 3=avg, 4=max. RTT groups absent when no packets received.
+var fpingRe = regexp.MustCompile(`xmt/rcv/%loss = \d+/\d+/(\d+)%(?:, min/avg/max = ([\d.]+)/([\d.]+)/([\d.]+))?`)
 
 // fpingPath returns the absolute path to fping.exe, expected to be in the
 // same directory as the running executable.
@@ -52,13 +55,13 @@ func fpingPath() string {
 	return filepath.Join(filepath.Dir(exe), "fping.exe")
 }
 
-// generatePingMetrics runs fping.exe and returns average RTT (ms) and packet
-// loss percentage for the given host. Both are nil on error or if fping cannot
-// be found. avg is nil when no packets were received (host unreachable).
-func generatePingMetrics(host string) (avg *float64, loss *int) {
+// generatePingMetrics runs fping.exe and returns min, avg, max RTT (ms) and
+// packet loss percentage for the given host. All are nil on error or if fping
+// cannot be found. RTT values are nil when no packets were received (host down).
+func generatePingMetrics(host string) (avg, minMS, maxMS *float64, loss *int) {
 	if !isValidHostname(host) {
 		slog.Error("monitoring: invalid hostname for ping metrics", "host", host)
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// fping writes its per-host summary to stderr regardless of exit code.
@@ -74,24 +77,29 @@ func generatePingMetrics(host string) (avg *float64, loss *int) {
 	m := fpingRe.FindStringSubmatch(output)
 	if m == nil {
 		slog.Error("monitoring: failed to parse fping output", "host", host, "output", output)
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 
 	lossVal, err := strconv.Atoi(m[1])
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	loss = &lossVal
 
-	// m[2] is the avg RTT field — only present when packets were received.
-	if m[2] != "" {
-		avgVal, err := strconv.ParseFloat(m[2], 64)
-		if err == nil {
-			avg = &avgVal
+	// m[2]=min, m[3]=avg, m[4]=max — only present when packets were received.
+	if m[3] != "" {
+		if v, err := strconv.ParseFloat(m[3], 64); err == nil {
+			avg = &v
+		}
+		if v, err := strconv.ParseFloat(m[2], 64); err == nil {
+			minMS = &v
+		}
+		if v, err := strconv.ParseFloat(m[4], 64); err == nil {
+			maxMS = &v
 		}
 	}
 
-	return avg, loss
+	return avg, minMS, maxMS, loss
 }
 
 // MonitoringService fetches monitoring probe configurations from the ForceDesk
@@ -130,10 +138,18 @@ func MonitoringService() {
 	}
 	slog.Debug("monitoring: total probes", "count", len(probes))
 
+	// probeRecord carries both the server-facing result and the RTT values
+	// needed for local graph rendering.
+	type probeRecord struct {
+		result probeResult
+		minMS  *float64
+		maxMS  *float64
+	}
+
 	var (
 		wg      sync.WaitGroup
 		mu      sync.Mutex
-		results []probeResult
+		records []probeRecord
 	)
 
 	for _, p := range probes {
@@ -142,7 +158,7 @@ func MonitoringService() {
 			defer wg.Done()
 			slog.Debug("monitoring: running probe", "probe_id", probe.ProbeID, "host", probe.Host, "check_type", probe.CheckType, "port", probe.Port)
 
-			avg, loss := generatePingMetrics(probe.Host)
+			avg, minMS, maxMS, loss := generatePingMetrics(probe.Host)
 			slog.Info("monitoring: ping metrics", "probe_id", probe.ProbeID, "ping_data", avg, "packet_loss_data", loss)
 
 			var status string
@@ -163,22 +179,32 @@ func MonitoringService() {
 			slog.Debug("monitoring: probe result", "probe_id", probe.ProbeID, "host", probe.Host, "status", status)
 
 			mu.Lock()
-			results = append(results, probeResult{
-				ID:             probe.ProbeID,
-				PingData:       avg,
-				PacketLossData: loss,
-				Status:         status,
+			records = append(records, probeRecord{
+				result: probeResult{
+					ID:             probe.ProbeID,
+					PingData:       avg,
+					PacketLossData: loss,
+					Status:         status,
+				},
+				minMS: minMS,
+				maxMS: maxMS,
 			})
 			mu.Unlock()
 		}(p)
 	}
 
 	wg.Wait()
-	slog.Info("monitoring: probes completed", "total", len(probes), "results", len(results))
+	slog.Info("monitoring: probes completed", "total", len(probes), "results", len(records))
 
-	if len(results) == 0 {
+	if len(records) == 0 {
 		slog.Info("monitoring: no results to send")
 		return
+	}
+
+	// Extract server-facing results.
+	results := make([]probeResult, len(records))
+	for i, r := range records {
+		results[i] = r.result
 	}
 
 	resp, err := client.PostJSON(tenant.URL("/api/agent/monitoring/response-bulk"), results)
@@ -190,6 +216,48 @@ func MonitoringService() {
 
 	slog.Debug("monitoring: POST response", "http_status", resp.StatusCode)
 	slog.Info("monitoring: combined results sent", "count", len(results))
+
+	// Persist measurements and regenerate graphs.
+	graphsDir := graph.GraphDir(config.DataDir())
+	if err := os.MkdirAll(graphsDir, 0755); err != nil {
+		slog.Error("monitoring: failed to create graphs dir", "err", err)
+		return
+	}
+
+	now := time.Now()
+	for _, rec := range records {
+		id := rec.result.ID
+		loss := 0
+		if rec.result.PacketLossData != nil {
+			loss = *rec.result.PacketLossData
+		}
+
+		if err := db.SaveProbeHistory(id, now, rec.result.PingData, rec.minMS, rec.maxMS, loss); err != nil {
+			slog.Error("monitoring: failed to save probe history", "probe_id", id, "err", err)
+			continue
+		}
+
+		samples, err := db.GetProbeHistory(id, graph.PlotW)
+		if err != nil {
+			slog.Error("monitoring: failed to fetch probe history", "probe_id", id, "err", err)
+			continue
+		}
+
+		gSamples := make([]graph.Sample, len(samples))
+		for i, s := range samples {
+			gSamples[i] = graph.Sample{
+				AvgMS:      s.AvgMS,
+				MinMS:      s.MinMS,
+				MaxMS:      s.MaxMS,
+				PacketLoss: s.PacketLoss,
+			}
+		}
+
+		outPath := graph.ProbePath(config.DataDir(), id)
+		if err := graph.Render(gSamples, outPath); err != nil {
+			slog.Error("monitoring: failed to render graph", "probe_id", id, "err", err)
+		}
+	}
 }
 
 func performTCPCheck(host string, port int) string {
