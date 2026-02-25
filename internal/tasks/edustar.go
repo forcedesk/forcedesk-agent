@@ -24,6 +24,40 @@ type eduStarConfig struct {
 	AuthMode     string `json:"auth_mode"`
 }
 
+// UnmarshalJSON handles school_code being sent as either a JSON string or number.
+func (c *eduStarConfig) UnmarshalJSON(b []byte) error {
+	type raw struct {
+		Username     string          `json:"username"`
+		Password     string          `json:"password"`
+		SchoolCode   json.RawMessage `json:"school_code"`
+		CRTGroupDN   string          `json:"crt_group_dn"`
+		CRTGroupName string          `json:"crt_group_name"`
+		AuthMode     string          `json:"auth_mode"`
+	}
+	var r raw
+	if err := json.Unmarshal(b, &r); err != nil {
+		return err
+	}
+	c.Username = r.Username
+	c.Password = r.Password
+	c.CRTGroupDN = r.CRTGroupDN
+	c.CRTGroupName = r.CRTGroupName
+	c.AuthMode = r.AuthMode
+
+	// school_code may arrive as a quoted string or a bare number.
+	var s string
+	if err := json.Unmarshal(r.SchoolCode, &s); err == nil {
+		c.SchoolCode = s
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(r.SchoolCode, &n); err != nil {
+		return fmt.Errorf("school_code: %w", err)
+	}
+	c.SchoolCode = n.String()
+	return nil
+}
+
 // crtAccount is a CRT service account fetched from the tenant for expire/enable operations.
 type crtAccount struct {
 	Login  string `json:"login"`
@@ -345,27 +379,13 @@ func generatePassword() (string, error) {
 // ============================================================
 
 // RunEduStarCLI executes an EduStar action and prints the result to stdout.
-// Config is read from local config.toml only — no tenant API calls are made
-// unless the action explicitly syncs data back to the server.
+// Config is resolved from local config.toml first; if not configured locally it is
+// fetched from the tenant API (encrypted). No connectivity pre-check is performed.
 func RunEduStarCLI(action string, opts EduStarCLIOpts) {
-	local := config.Get().EduStar
-	if !local.Enabled || local.Username == "" {
-		fmt.Fprintln(os.Stderr, "edustar: not configured — set [edustar] in config.toml")
-		os.Exit(1)
-	}
-
-	cfg := &eduStarConfig{
-		Username:     local.Username,
-		Password:     local.GetPassword(),
-		SchoolCode:   local.SchoolCode,
-		CRTGroupDN:   local.CRTGroupDN,
-		CRTGroupName: local.CRTGroupName,
-		AuthMode:     local.AuthMode,
-	}
-
-	stmc := edustar.New(cfg.AuthMode)
-	if err := stmc.Login(cfg.Username, cfg.Password); err != nil {
-		fmt.Fprintf(os.Stderr, "edustar: STMC login failed: %v\n", err)
+	tc := tenant.New()
+	stmc, cfg, err := initClient(tc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "edustar: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -473,7 +493,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 			cliError(fmt.Errorf("GetStudents: %w", err))
 		}
 		fmt.Printf("Fetched %d students. Posting to tenant...\n", len(students))
-		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/students"), students)
+		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/students"), students)
 		if err != nil {
 			cliError(fmt.Errorf("post students: %w", err))
 		}
@@ -487,7 +507,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 			cliError(fmt.Errorf("GetStaff: %w", err))
 		}
 		fmt.Printf("Fetched %d staff. Posting to tenant...\n", len(staff))
-		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/staff"), staff)
+		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/staff"), staff)
 		if err != nil {
 			cliError(fmt.Errorf("post staff: %w", err))
 		}
@@ -503,7 +523,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 			cliError(fmt.Errorf("GetGroup: %w", err))
 		}
 		fmt.Printf("Fetched %d members. Posting to tenant...\n", len(members))
-		resp, err := tenant.New().PostJSON(tenant.URL("/api/agent/ingest/edustar/crt-accounts"), members)
+		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/crt-accounts"), members)
 		if err != nil {
 			cliError(fmt.Errorf("post CRT accounts: %w", err))
 		}
@@ -511,7 +531,6 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		fmt.Printf("Done. HTTP %d\n", resp.StatusCode)
 
 	case "expire-crt-accounts":
-		tc := tenant.New()
 		accounts, err := fetchCRTAccounts(tc)
 		if err != nil {
 			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
@@ -530,7 +549,6 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		fmt.Printf("Done. %d accounts expired.\n", len(accounts))
 
 	case "enable-crt-accounts":
-		tc := tenant.New()
 		accounts, err := fetchCRTAccounts(tc)
 		if err != nil {
 			cliError(fmt.Errorf("fetch CRT accounts: %w", err))
