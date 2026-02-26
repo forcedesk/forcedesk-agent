@@ -11,9 +11,59 @@ import (
 	"time"
 
 	"github.com/forcedesk/forcedesk-agent/internal/config"
-	"github.com/forcedesk/forcedesk-agent/internal/db"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
+
+// papercutConfig holds PaperCut connection settings fetched from the tenant API.
+type papercutConfig struct {
+	APIURL string `json:"papercut_api_url"`
+	APIKey string `json:"papercut_api_key"`
+}
+
+// fetchPapercutConfig retrieves PaperCut connection config from the tenant API.
+// The response is decrypted using the ChaCha20-Poly1305 key from [tenant] encryption_key in config.toml.
+func fetchPapercutConfig(tc *tenant.Client) (*papercutConfig, error) {
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		return nil, fmt.Errorf("encryption key: %w", err)
+	}
+
+	var cfg papercutConfig
+	if err := tc.GetEncryptedJSON(tenant.URL("/api/agent/papercut-config"), &cfg, key); err != nil {
+		return nil, fmt.Errorf("fetch papercut config: %w", err)
+	}
+	if cfg.APIURL == "" || cfg.APIKey == "" {
+		return nil, fmt.Errorf("papercut config is incomplete (missing api_url or api_key)")
+	}
+	return &cfg, nil
+}
+
+// pcServerUser is a user entry returned by the tenant API.
+type pcServerUser struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+}
+
+// pcServerPayload is the response from the tenant's user list endpoint.
+type pcServerPayload struct {
+	Staff    []pcServerUser `json:"staff"`
+	Students []pcServerUser `json:"students"`
+}
+
+// fetchPapercutUsers retrieves the staff and student lists from the tenant API.
+// The response is decrypted using the ChaCha20-Poly1305 key from [tenant] encryption_key in config.toml.
+func fetchPapercutUsers(tc *tenant.Client) (*pcServerPayload, error) {
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		return nil, fmt.Errorf("encryption key: %w", err)
+	}
+
+	var payload pcServerPayload
+	if err := tc.GetEncryptedJSON(tenant.URL("/api/agent/ingest/papercut-data"), &payload, key); err != nil {
+		return nil, fmt.Errorf("fetch papercut users: %w", err)
+	}
+	return &payload, nil
+}
 
 type pcUserRecord struct {
 	Username string   `json:"username,omitempty"`
@@ -33,71 +83,63 @@ type pcPayload struct {
 func PapercutService() {
 	slog.Info("papercut: starting")
 
-	cfg := config.Get()
-	if !cfg.Papercut.Enabled {
-		slog.Info("papercut: disabled in config, skipping")
-		return
-	}
-
 	client := tenant.New()
 	if err := client.TestConnectivity(); err != nil {
 		slog.Error("papercut: connectivity check failed", "err", err)
 		return
 	}
 
+	pcCfg, err := fetchPapercutConfig(client)
+	if err != nil {
+		slog.Error("papercut: failed to resolve config", "err", err)
+		return
+	}
+
+	users, err := fetchPapercutUsers(client)
+	if err != nil {
+		slog.Error("papercut: failed to fetch users", "err", err)
+		return
+	}
+	slog.Debug("papercut: users received", "staff", len(users.Staff), "students", len(users.Students))
+
 	payload := pcPayload{}
 
-	// Query staff members from the local database.
-	staff, err := db.GetStaff()
-	if err != nil {
-		slog.Error("papercut: failed to query staff", "err", err)
-	}
-	apiKey := cfg.Papercut.GetAPIKey()
-	slog.Debug("papercut: staff records to process", "count", len(staff))
-	for _, s := range staff {
-		slog.Debug("papercut: querying staff member", "username", s.StaffCode)
-		pin, err := pcGetProperty(cfg.Papercut.APIURL, apiKey, s.StaffCode, "secondary-card-number")
+	for _, s := range users.Staff {
+		slog.Debug("papercut: querying staff member", "username", s.Username)
+		pin, err := pcGetProperty(pcCfg.APIURL, pcCfg.APIKey, s.Username, "secondary-card-number")
 		if err != nil {
-			slog.Debug("papercut: PIN lookup failed", "username", s.StaffCode, "err", err)
+			slog.Debug("papercut: PIN lookup failed", "username", s.Username, "err", err)
 		}
-		bal, err := pcGetPropertyFloat(cfg.Papercut.APIURL, apiKey, s.StaffCode, "balance")
+		bal, err := pcGetPropertyFloat(pcCfg.APIURL, pcCfg.APIKey, s.Username, "balance")
 		if err != nil {
-			slog.Debug("papercut: balance lookup failed", "username", s.StaffCode, "err", err)
+			slog.Debug("papercut: balance lookup failed", "username", s.Username, "err", err)
 		}
-		slog.Debug("papercut: staff result", "username", s.StaffCode, "has_pin", pin != nil, "has_balance", bal != nil)
+		slog.Debug("papercut: staff result", "username", s.Username, "has_pin", pin != nil, "has_balance", bal != nil)
 
 		if pin == nil && bal == nil {
 			continue
 		}
-		rec := pcUserRecord{Username: s.StaffCode, PIN: pin, Balance: bal}
-		payload.Staff = append(payload.Staff, rec)
-		slog.Info("papercut: processed staff", "username", s.StaffCode)
+		payload.Staff = append(payload.Staff, pcUserRecord{Username: s.Username, PIN: pin, Balance: bal})
+		slog.Info("papercut: processed staff", "username", s.Username)
 	}
 
-	// Query students from the local database.
-	students, err := db.GetStudents()
-	if err != nil {
-		slog.Error("papercut: failed to query students", "err", err)
-	}
-	slog.Debug("papercut: student records to process", "count", len(students))
-	for _, s := range students {
-		slog.Debug("papercut: querying student", "login", s.Login)
-		pin, err := pcGetProperty(cfg.Papercut.APIURL, apiKey, s.Login, "secondary-card-number")
+	for _, s := range users.Students {
+		slog.Debug("papercut: querying student", "username", s.Username)
+		pin, err := pcGetProperty(pcCfg.APIURL, pcCfg.APIKey, s.Username, "secondary-card-number")
 		if err != nil {
-			slog.Debug("papercut: PIN lookup failed", "login", s.Login, "err", err)
+			slog.Debug("papercut: PIN lookup failed", "username", s.Username, "err", err)
 		}
-		bal, err := pcGetPropertyFloat(cfg.Papercut.APIURL, apiKey, s.Login, "balance")
+		bal, err := pcGetPropertyFloat(pcCfg.APIURL, pcCfg.APIKey, s.Username, "balance")
 		if err != nil {
-			slog.Debug("papercut: balance lookup failed", "login", s.Login, "err", err)
+			slog.Debug("papercut: balance lookup failed", "username", s.Username, "err", err)
 		}
-		slog.Debug("papercut: student result", "login", s.Login, "has_pin", pin != nil, "has_balance", bal != nil)
+		slog.Debug("papercut: student result", "username", s.Username, "has_pin", pin != nil, "has_balance", bal != nil)
 
 		if pin == nil && bal == nil {
 			continue
 		}
-		rec := pcUserRecord{Login: s.Login, PIN: pin, Balance: bal}
-		payload.Students = append(payload.Students, rec)
-		slog.Info("papercut: processed student", "login", s.Login)
+		payload.Students = append(payload.Students, pcUserRecord{Login: s.Username, PIN: pin, Balance: bal})
+		slog.Info("papercut: processed student", "username", s.Username)
 	}
 
 	if len(payload.Staff) == 0 && len(payload.Students) == 0 {
@@ -105,7 +147,13 @@ func PapercutService() {
 		return
 	}
 
-	resp, err := client.PostJSON(tenant.URL("/api/agent/ingest/papercut-data"), payload)
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		slog.Error("papercut: failed to get encryption key", "err", err)
+		return
+	}
+
+	resp, err := client.PostEncryptedJSON(tenant.URL("/api/agent/ingest/papercut-data"), payload, key)
 	if err != nil {
 		slog.Error("papercut: failed to send data", "err", err)
 		return
@@ -212,13 +260,13 @@ func stripXMLTag(s, tag string) string {
 	return s
 }
 
-// pcGetProperty returns a numeric string value, or nil if not present/numeric.
+// pcGetProperty returns the property value, or nil if empty.
 func pcGetProperty(apiURL, apiKey, username, property string) (*string, error) {
 	val, err := pcCall(apiURL, apiKey, username, property)
 	if err != nil {
 		return nil, err
 	}
-	if !isNumericString(val) {
+	if val == "" {
 		return nil, nil
 	}
 	return &val, nil
@@ -235,13 +283,4 @@ func pcGetPropertyFloat(apiURL, apiKey, username, property string) (*float64, er
 		return nil, nil
 	}
 	return &f, nil
-}
-
-func isNumericString(s string) bool {
-	if s == "" {
-		return false
-	}
-	var f float64
-	_, err := fmt.Sscanf(s, "%f", &f)
-	return err == nil
 }

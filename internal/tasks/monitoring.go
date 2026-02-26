@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/forcedesk/forcedesk-agent/internal/config"
-	"github.com/forcedesk/forcedesk-agent/internal/db"
 	"github.com/forcedesk/forcedesk-agent/internal/graph"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -232,31 +231,36 @@ func MonitoringService() {
 			loss = *rec.result.PacketLossData
 		}
 
-		if err := db.SaveProbeHistory(id, now, rec.result.PingData, rec.minMS, rec.maxMS, loss); err != nil {
-			slog.Error("monitoring: failed to save probe history", "probe_id", id, "err", err)
+		if err := graph.EnsureRRD(config.DataDir(), id); err != nil {
+			slog.Error("monitoring: failed to ensure RRD", "probe_id", id, "err", err)
 			continue
 		}
 
-		samples, err := db.GetProbeHistory(id, graph.PlotW)
-		if err != nil {
-			slog.Error("monitoring: failed to fetch probe history", "probe_id", id, "err", err)
+		if err := graph.Update(config.DataDir(), id, now, rec.result.PingData, rec.minMS, rec.maxMS, loss); err != nil {
+			slog.Error("monitoring: failed to update RRD", "probe_id", id, "err", err)
 			continue
-		}
-
-		gSamples := make([]graph.Sample, len(samples))
-		for i, s := range samples {
-			gSamples[i] = graph.Sample{
-				AvgMS:      s.AvgMS,
-				MinMS:      s.MinMS,
-				MaxMS:      s.MaxMS,
-				PacketLoss: s.PacketLoss,
-			}
 		}
 
 		outPath := graph.ProbePath(config.DataDir(), id)
-		if err := graph.Render(gSamples, outPath); err != nil {
+		if err := graph.Render(config.DataDir(), id, outPath); err != nil {
 			slog.Error("monitoring: failed to render graph", "probe_id", id, "err", err)
+			continue
 		}
+
+		pngData, err := os.ReadFile(outPath)
+		if err != nil {
+			slog.Error("monitoring: failed to read rendered graph", "probe_id", id, "err", err)
+			continue
+		}
+
+		uploadURL := tenant.URL(fmt.Sprintf("/api/agent/monitoring/graph/%d", id))
+		uploadResp, err := client.PostFile(uploadURL, fmt.Sprintf("probe_%d.png", id), pngData)
+		if err != nil {
+			slog.Error("monitoring: failed to upload graph", "probe_id", id, "err", err)
+			continue
+		}
+		uploadResp.Body.Close()
+		slog.Debug("monitoring: graph uploaded", "probe_id", id, "http_status", uploadResp.StatusCode)
 	}
 }
 

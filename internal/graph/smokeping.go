@@ -1,209 +1,169 @@
-// Package graph renders Smokeping-style latency graphs as PNG files using only
-// the Go standard library (image/png). No external dependencies are required.
+// Package graph manages per-probe RRD databases and renders Smokeping-style
+// latency graphs as PNG files via rrdtool.
 //
-// Each graph shows a configurable window of probe measurements as:
-//   - A coloured smoke band from min RTT to max RTT
-//   - A bright dot at the average RTT
-//   - A dark-red tick at the bottom when the host was unreachable
+// Each probe gets its own RRD file storing avg/min/max RTT and packet loss at
+// one-minute resolution. Graphs are rendered with a translucent "smoke" band
+// between min and max RTT, a bright average line, and a loss summary in the
+// legend.
 //
-// Colour encodes packet loss: green (0%) → yellow → orange → red (100%).
+// # Windows path note
+//
+// rrdtool's DEF parser splits arguments on ':'. On Windows, absolute paths
+// contain a drive-letter colon (C:\...) that breaks parsing — even with forward
+// slashes (C:/...). The fix used throughout this package is to set cmd.Dir to
+// the graphs directory and pass only bare filenames in all rrdtool arguments,
+// so no argument ever contains a colon from a drive letter.
 package graph
 
 import (
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"time"
 )
 
-const (
-	CanvasW = 900
-	CanvasH = 180
-	padL    = 8
-	padR    = 8
-	padT    = 8
-	padB    = 8
+const rrdStep = 60 // seconds; must match the probe run interval
 
-	// PlotW is the usable plot width in pixels — also the maximum number of
-	// samples that can be rendered (one column per sample).
-	PlotW = CanvasW - padL - padR // 884
-	plotH = CanvasH - padT - padB // 164
-)
-
-var (
-	bgColor   = color.RGBA{0x1a, 0x1a, 0x2a, 0xff}
-	gridColor = color.RGBA{0x2a, 0x2a, 0x45, 0xff}
-	axisColor = color.RGBA{0x55, 0x55, 0x88, 0xff}
-	downColor = color.RGBA{0x88, 0x00, 0x00, 0xff}
-)
-
-// Sample holds one probe measurement for graph rendering.
-type Sample struct {
-	AvgMS      *float64 // nil when the host was unreachable
-	MinMS      *float64
-	MaxMS      *float64
-	PacketLoss int // 0–100
+// rrdtoolPath returns the absolute path to the rrdtool binary.
+// It first checks the directory of the running executable (bundled deploy),
+// then falls back to the system PATH.
+func rrdtoolPath() string {
+	bin := "rrdtool"
+	if runtime.GOOS == "windows" {
+		bin = "rrdtool.exe"
+	}
+	if exe, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), bin)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return bin
 }
 
-// Render writes a Smokeping-style PNG to outputPath.
-// samples must be sorted oldest-first; at most PlotW samples are rendered.
-func Render(samples []Sample, outputPath string) error {
-	img := image.NewRGBA(image.Rect(0, 0, CanvasW, CanvasH))
-
-	fillRect(img, 0, 0, CanvasW, CanvasH, bgColor)
-
-	// Horizontal grid lines at 25%, 50%, 75% of the Y axis.
-	for _, f := range []float64{0.25, 0.50, 0.75} {
-		hline(img, padL, padL+PlotW-1, padT+int(float64(plotH)*(1-f)), gridColor)
-	}
-
-	// Axis frame.
-	hline(img, padL, padL+PlotW-1, padT, axisColor)
-	hline(img, padL, padL+PlotW-1, padT+plotH, axisColor)
-	vline(img, padL, padT, padT+plotH, axisColor)
-	vline(img, padL+PlotW-1, padT, padT+plotH, axisColor)
-
-	if len(samples) == 0 {
-		return encode(img, outputPath)
-	}
-
-	// Clamp to PlotW samples (take the most recent ones).
-	if len(samples) > PlotW {
-		samples = samples[len(samples)-PlotW:]
-	}
-
-	// Auto-scale Y: find the peak max RTT across all samples.
-	peakMS := 10.0
-	for _, s := range samples {
-		if s.MaxMS != nil && *s.MaxMS > peakMS {
-			peakMS = *s.MaxMS
-		}
-	}
-	peakMS *= 1.2 // 20% headroom above the tallest spike
-
-	toY := func(ms float64) int {
-		f := ms / peakMS
-		if f > 1 {
-			f = 1
-		}
-		if f < 0 {
-			f = 0
-		}
-		return padT + int(float64(plotH)*(1-f))
-	}
-
-	n := len(samples)
-	toX := func(i int) int {
-		if n <= 1 {
-			return padL + PlotW/2
-		}
-		return padL + i*(PlotW-1)/(n-1)
-	}
-
-	for i, s := range samples {
-		x := toX(i)
-
-		if s.AvgMS == nil {
-			// Host unreachable: draw a short dark-red tick at the bottom.
-			vline(img, x, padT+plotH-5, padT+plotH, downColor)
-			continue
-		}
-
-		bright, smoke := palette(s.PacketLoss)
-
-		// Smoke band: shaded region from min to max RTT.
-		if s.MinMS != nil && s.MaxMS != nil {
-			vline(img, x, toY(*s.MaxMS), toY(*s.MinMS), smoke)
-		}
-
-		// Average: two-pixel bright marker.
-		ya := toY(*s.AvgMS)
-		setpx(img, x, ya, bright)
-		setpx(img, x, ya+1, bright)
-	}
-
-	return encode(img, outputPath)
+// rrdFilename returns the bare RRD filename for a probe (no directory).
+func rrdFilename(probeID int64) string {
+	return fmt.Sprintf("probe_%d.rrd", probeID)
 }
 
-// GraphDir returns the path where probe PNGs are written.
+// GraphDir returns the directory where RRD databases and PNG graphs are stored.
 func GraphDir(dataDir string) string {
-	return dataDir + string(os.PathSeparator) + "graphs"
+	return filepath.Join(dataDir, "graphs")
 }
 
-// ProbePath returns the full output path for a probe's graph PNG.
+// RRDPath returns the full path to the RRD database for a probe.
+func RRDPath(dataDir string, probeID int64) string {
+	return filepath.Join(GraphDir(dataDir), rrdFilename(probeID))
+}
+
+// ProbePath returns the full path to the rendered PNG graph for a probe.
 func ProbePath(dataDir string, probeID int64) string {
-	return fmt.Sprintf("%s%cprobe_%d.png", GraphDir(dataDir), os.PathSeparator, probeID)
+	return filepath.Join(GraphDir(dataDir), fmt.Sprintf("probe_%d.png", probeID))
 }
 
-// palette returns a bright opaque and a semi-transparent smoke colour for
-// a given packet-loss percentage.
-func palette(loss int) (bright, smoke color.RGBA) {
-	var r, g, b uint8
-	switch {
-	case loss == 0:
-		r, g, b = 0x00, 0xcc, 0x00 // green
-	case loss <= 5:
-		r, g, b = 0x88, 0xcc, 0x00 // yellow-green
-	case loss <= 20:
-		r, g, b = 0xff, 0xcc, 0x00 // yellow
-	case loss <= 50:
-		r, g, b = 0xff, 0x66, 0x00 // orange
-	default:
-		r, g, b = 0xff, 0x00, 0x00 // red
+// EnsureRRD creates the RRD database for a probe if it does not already exist.
+// The database stores four data sources at one-minute resolution:
+//   - avg: mean round-trip time (ms)
+//   - min: minimum RTT (ms)
+//   - max: maximum RTT (ms)
+//   - loss: packet loss percentage (0–100)
+func EnsureRRD(dataDir string, probeID int64) error {
+	if _, err := os.Stat(RRDPath(dataDir, probeID)); err == nil {
+		return nil // already exists
 	}
-	return color.RGBA{r, g, b, 0xff}, color.RGBA{r, g, b, 0x60}
+	cmd := exec.Command(rrdtoolPath(),
+		"create", rrdFilename(probeID),
+		"--step", strconv.Itoa(rrdStep),
+		// Heartbeat = 2× step; U (unknown) stored when host is unreachable.
+		"DS:avg:GAUGE:120:0:U",
+		"DS:min:GAUGE:120:0:U",
+		"DS:max:GAUGE:120:0:U",
+		"DS:loss:GAUGE:120:0:100",
+		// 1-min resolution: 24 h of raw data.
+		"RRA:AVERAGE:0.5:1:1440",
+		"RRA:MIN:0.5:1:1440",
+		"RRA:MAX:0.5:1:1440",
+		// 5-min resolution: 1 week of consolidated data.
+		"RRA:AVERAGE:0.5:5:2016",
+		"RRA:MIN:0.5:5:2016",
+		"RRA:MAX:0.5:5:2016",
+	)
+	cmd.Dir = GraphDir(dataDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("rrdtool create: %w\noutput: %s", err, out)
+	}
+	return nil
 }
 
-// ── primitive drawing helpers ────────────────────────────────────────────────
-
-func fillRect(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
-	for y := y0; y < y1; y++ {
-		for x := x0; x < x1; x++ {
-			img.SetRGBA(x, y, c)
+// Update feeds one probe measurement into the RRD database.
+// avg, min, and max are nil when the host was unreachable; they are stored as
+// "U" (unknown) so RRDtool can handle gaps cleanly.
+//
+// The timestamp is passed to rrdtool as "N" (current time at invocation) rather
+// than a pre-captured Unix value. This avoids "minimum one second step" errors
+// when multiple probes finish within the same second and share the same ts.
+func Update(dataDir string, probeID int64, _ time.Time, avg, min, max *float64, loss int) error {
+	f := func(v *float64) string {
+		if v == nil {
+			return "U"
 		}
+		return strconv.FormatFloat(*v, 'f', 4, 64)
 	}
+	value := fmt.Sprintf("N:%s:%s:%s:%d", f(avg), f(min), f(max), loss)
+	cmd := exec.Command(rrdtoolPath(), "update", rrdFilename(probeID), value)
+	cmd.Dir = GraphDir(dataDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("rrdtool update: %w\noutput: %s", err, out)
+	}
+	return nil
 }
 
-func hline(img *image.RGBA, x0, x1, y int, c color.RGBA) {
-	b := img.Bounds()
-	if y < b.Min.Y || y >= b.Max.Y {
-		return
+// Render generates a Smokeping-style PNG graph covering the last 24 hours and
+// writes it to outputPath.
+func Render(dataDir string, probeID int64, outputPath string) error {
+	rrdFile := rrdFilename(probeID)
+	pngFile := filepath.Base(outputPath)
+	cmd := exec.Command(rrdtoolPath(), "graph", pngFile,
+		"--imgformat", "PNG",
+		"--width", "850",
+		"--height", "150",
+		"--start", "-86400",
+		"--end", "now",
+		"--title", fmt.Sprintf("Probe %d – last 24 h", probeID),
+		"--vertical-label", "ms",
+		"--lower-limit", "0",
+		"--slope-mode",
+		// Light theme.
+		"--color", "BACK#ffffff",
+		"--color", "CANVAS#ffffff",
+		"--color", "FONT#333333",
+		"--color", "GRID#cccccc",
+		"--color", "MGRID#999999",
+		"--color", "FRAME#999999",
+		"--color", "ARROW#333333",
+		// Data sources — bare filenames avoid the drive-letter colon on Windows.
+		fmt.Sprintf("DEF:avg=%s:avg:AVERAGE", rrdFile),
+		fmt.Sprintf("DEF:min=%s:min:MIN", rrdFile),
+		fmt.Sprintf("DEF:max=%s:max:MAX", rrdFile),
+		fmt.Sprintf("DEF:loss=%s:loss:AVERAGE", rrdFile),
+		// Smoke band: transparent base + translucent fill from min→max.
+		"CDEF:smoke=max,min,-",
+		"AREA:min#00000000",
+		"AREA:smoke#0099cc55:Smoke ",
+		// Average RTT line.
+		"LINE1:avg#00cc00:Average",
+		// Legend.
+		`GPRINT:avg:LAST: Last\: %6.2lf ms`,
+		`GPRINT:avg:AVERAGE: Avg\: %6.2lf ms`,
+		`GPRINT:avg:MAX: Max\: %6.2lf ms\n`,
+		`GPRINT:loss:AVERAGE:Loss\: %.1lf%%\n`,
+	)
+	cmd.Dir = GraphDir(dataDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("rrdtool graph: %w\noutput: %s", err, out)
 	}
-	for x := x0; x <= x1; x++ {
-		if x >= b.Min.X && x < b.Max.X {
-			img.SetRGBA(x, y, c)
-		}
-	}
-}
-
-func vline(img *image.RGBA, x, y0, y1 int, c color.RGBA) {
-	b := img.Bounds()
-	if x < b.Min.X || x >= b.Max.X {
-		return
-	}
-	if y0 > y1 {
-		y0, y1 = y1, y0
-	}
-	for y := y0; y <= y1; y++ {
-		if y >= b.Min.Y && y < b.Max.Y {
-			img.SetRGBA(x, y, c)
-		}
-	}
-}
-
-func setpx(img *image.RGBA, x, y int, c color.RGBA) {
-	b := img.Bounds()
-	if x >= b.Min.X && x < b.Max.X && y >= b.Min.Y && y < b.Max.Y {
-		img.SetRGBA(x, y, c)
-	}
-}
-
-func encode(img *image.RGBA, path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return png.Encode(f, img)
+	return nil
 }

@@ -2,11 +2,13 @@ package tenant
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -163,6 +165,70 @@ func (c *Client) GetEncryptedJSON(url string, dst any, key []byte) error {
 	}
 
 	return json.Unmarshal(plaintext, dst)
+}
+
+// PostEncryptedJSON marshals v as JSON, encrypts it with ChaCha20-Poly1305 using
+// the provided 32-byte key, and POSTs the result as application/octet-stream.
+// Wire format: nonce (12 bytes) || ciphertext+tag — the inverse of GetEncryptedJSON.
+func (c *Client) PostEncryptedJSON(url string, v any, key []byte) (*http.Response, error) {
+	if !c.limiter.Allow() {
+		slog.Warn("rate limit reached, throttling request", "url", url)
+		c.limiter.Wait()
+	}
+
+	plaintext, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("marshal payload: %w", err)
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return nil, fmt.Errorf("create cipher: %w", err)
+	}
+
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("generate nonce: %w", err)
+	}
+
+	ciphertext := aead.Seal(nonce, nonce, plaintext, nil)
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(ciphertext))
+	if err != nil {
+		return nil, err
+	}
+	c.applyHeaders(req)
+	req.Header.Set("Content-Type", "application/octet-stream")
+	return c.http.Do(req)
+}
+
+// PostFile uploads raw bytes as a multipart/form-data POST. The file is sent
+// under the field name "file" with the supplied filename.
+func (c *Client) PostFile(url, filename string, data []byte) (*http.Response, error) {
+	if !c.limiter.Allow() {
+		slog.Warn("rate limit reached, throttling request", "url", url)
+		c.limiter.Wait()
+	}
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := fw.Write(data); err != nil {
+		return nil, fmt.Errorf("write file data: %w", err)
+	}
+	mw.Close()
+
+	req, err := http.NewRequest(http.MethodPost, url, &buf)
+	if err != nil {
+		return nil, err
+	}
+	// Apply auth headers then override Content-Type for multipart.
+	c.applyHeaders(req)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return c.http.Do(req)
 }
 
 // TestConnectivity verifies that the agent can successfully reach the tenant API server.
