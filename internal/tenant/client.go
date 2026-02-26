@@ -167,6 +167,43 @@ func (c *Client) GetEncryptedJSON(url string, dst any, key []byte) error {
 	return json.Unmarshal(plaintext, dst)
 }
 
+// GetEncryptedBytes performs an authenticated GET, decrypts the response body
+// with ChaCha20-Poly1305, and returns the raw plaintext bytes.
+// Useful for logging or custom unmarshalling.
+func (c *Client) GetEncryptedBytes(url string, key []byte) ([]byte, error) {
+	resp, err := c.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read encrypted response: %w", err)
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return nil, fmt.Errorf("create cipher: %w", err)
+	}
+
+	ns := aead.NonceSize()
+	if len(body) < ns {
+		return nil, fmt.Errorf("encrypted response too short (%d bytes)", len(body))
+	}
+
+	plaintext, err := aead.Open(nil, body[:ns], body[ns:], nil)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt response: %w", err)
+	}
+
+	return plaintext, nil
+}
+
 // PostEncryptedJSON marshals v as JSON, encrypts it with ChaCha20-Poly1305 using
 // the provided 32-byte key, and POSTs the result as application/octet-stream.
 // Wire format: nonce (12 bytes) || ciphertext+tag — the inverse of GetEncryptedJSON.

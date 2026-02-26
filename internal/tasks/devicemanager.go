@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/forcedesk/forcedesk-agent/internal/config"
 	"github.com/forcedesk/forcedesk-agent/internal/sshconn"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -24,10 +25,6 @@ func (f *flexBool) UnmarshalJSON(b []byte) error {
 		*f = false
 	}
 	return nil
-}
-
-type dmPayloadItem struct {
-	PayloadData []devicePayload `json:"payload_data"`
 }
 
 type devicePayload struct {
@@ -65,18 +62,28 @@ func DeviceManagerService() {
 		return
 	}
 
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		slog.Error("devicemanager: failed to get encryption key", "err", err)
+		return
+	}
+
 	url := tenant.URL("/api/agent/devicemanager/payloads")
 	slog.Debug("devicemanager: GET", "url", url)
 
-	var items []dmPayloadItem
-	if err := client.GetJSON(url, &items); err != nil {
+	var item struct {
+		Payloads []struct {
+			PayloadData []devicePayload `json:"payload_data"`
+		} `json:"payloads"`
+	}
+	if err := client.GetEncryptedJSON(url, &item, key); err != nil {
 		slog.Error("devicemanager: failed to fetch payloads", "err", err)
 		return
 	}
 
-	slog.Debug("devicemanager: payload items received", "count", len(items))
+	slog.Debug("devicemanager: payload items received", "count", len(item.Payloads))
 
-	if len(items) == 0 {
+	if len(item.Payloads) == 0 {
 		slog.Info("devicemanager: no payloads received")
 		return
 	}
@@ -87,33 +94,34 @@ func DeviceManagerService() {
 	var wg sync.WaitGroup
 	dispatched := 0
 
-	for _, item := range items {
-		for _, dev := range item.PayloadData {
+	for _, p := range item.Payloads {
+		for _, dev := range p.PayloadData {
 			if dev.DeviceUsername == "" || dev.DevicePassword == "" {
-				slog.Debug("devicemanager: skipping device with no credentials", "device", dev.Name)
+				slog.Warn("devicemanager: skipping device with no credentials", "device", dev.Name, "type", dev.Type)
 				continue
 			}
 			wg.Add(1)
 			dispatched++
+			slog.Info("devicemanager: dispatching backup", "device", dev.Name, "type", dev.Type, "host", dev.Hostname)
 			go func(d devicePayload) {
 				defer wg.Done()
-				runDeviceBackup(client, d, batchID)
+				runDeviceBackup(client, d, batchID, key)
 			}(dev)
 		}
 	}
 
 	wg.Wait()
-	slog.Info("devicemanager: completed", "dispatched", dispatched, "batch", batchID)
+	slog.Info("devicemanager: completed", "dispatched", dispatched, "total", len(item.Payloads), "batch", batchID)
 }
 
-func runDeviceBackup(client *tenant.Client, dev devicePayload, batchID string) {
+func runDeviceBackup(client *tenant.Client, dev devicePayload, batchID string, key []byte) {
 	cmd := deviceCommand(dev)
 	if cmd == "" {
 		slog.Error("devicemanager: unsupported device type", "type", dev.Type, "name", dev.Name)
 		return
 	}
 
-	slog.Debug("devicemanager: SSH backup", "device", dev.Name, "host", dev.Hostname, "port", dev.Port, "type", dev.Type, "legacy", dev.IsCiscoLegacy, "command", cmd)
+	slog.Info("devicemanager: SSH backup starting", "device", dev.Name, "host", dev.Hostname, "port", dev.Port, "type", dev.Type, "legacy", dev.IsCiscoLegacy, "command", cmd)
 
 	cfg := sshconn.Config{
 		Host:     dev.Hostname,
@@ -145,7 +153,7 @@ func runDeviceBackup(client *tenant.Client, dev devicePayload, batchID string) {
 		Log:      fmt.Sprintf("Backup for Device: %s was successful.", dev.Name),
 	}
 
-	resp, err := client.PostJSON(tenant.URL("/api/agent/devicemanager/response"), result)
+	resp, err := client.PostEncryptedJSON(tenant.URL("/api/agent/devicemanager/response"), result, key)
 	if err != nil {
 		slog.Error("devicemanager: failed to send backup", "device", dev.Name, "err", err)
 		return

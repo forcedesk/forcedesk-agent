@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forcedesk/forcedesk-agent/internal/config"
 	"github.com/forcedesk/forcedesk-agent/internal/sshconn"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -62,6 +63,13 @@ func DeviceManagerQuery() {
 	slog.Info("devicequery: starting 5-minute polling loop")
 
 	client := tenant.New()
+
+	key, err := config.Get().Tenant.GetEncryptionKey()
+	if err != nil {
+		slog.Error("devicequery: failed to get encryption key", "err", err)
+		return
+	}
+
 	const pollInterval = 15 * time.Second
 	const maxRuntime = 5 * time.Minute
 	deadline := time.Now().Add(maxRuntime)
@@ -72,7 +80,7 @@ func DeviceManagerQuery() {
 		slog.Debug("devicequery: GET", "url", url)
 
 		var result dqResponse
-		if err := client.GetJSON(url, &result); err != nil {
+		if err := client.GetEncryptedJSON(url, &result, key); err != nil {
 			slog.Error("devicequery: failed to fetch payloads", "err", err)
 			time.Sleep(pollInterval)
 			continue
@@ -93,7 +101,7 @@ func DeviceManagerQuery() {
 			wg.Add(1)
 			go func(payload dqPayload, legacyOpts string) {
 				defer wg.Done()
-				processDeviceQuery(client, payload, legacyOpts)
+				processDeviceQuery(client, payload, legacyOpts, key)
 			}(p, result.Config.LegacySSHOptions)
 		}
 		wg.Wait()
@@ -104,17 +112,17 @@ func DeviceManagerQuery() {
 	slog.Info("devicequery: max runtime reached, exiting")
 }
 
-func processDeviceQuery(client *tenant.Client, p dqPayload, legacySSHOpts string) {
+func processDeviceQuery(client *tenant.Client, p dqPayload, legacySSHOpts string, key []byte) {
 	data := p.PayloadData
 
 	if !allowedCommands[data.Command] {
 		slog.Error("devicequery: command not in allowlist", "id", p.ID, "command", data.Command)
-		postQueryError(client, p.ID, "requested command is not permitted")
+		postQueryError(client, p.ID, "requested command is not permitted", key)
 		return
 	}
 
 	if data.DeviceHostname == "" || data.Username == "" || data.Password == "" || data.Command == "" {
-		postQueryError(client, p.ID, "missing required payload fields")
+		postQueryError(client, p.ID, "missing required payload fields", key)
 		return
 	}
 
@@ -137,7 +145,7 @@ func processDeviceQuery(client *tenant.Client, p dqPayload, legacySSHOpts string
 	output, err := sshconn.RunCommand(cfg, data.Command)
 	if err != nil {
 		slog.Error("devicequery: SSH command failed", "id", p.ID, "err", err)
-		postQueryError(client, p.ID, err.Error())
+		postQueryError(client, p.ID, err.Error(), key)
 		return
 	}
 
@@ -150,15 +158,15 @@ func processDeviceQuery(client *tenant.Client, p dqPayload, legacySSHOpts string
 		"device_hostname": data.DeviceHostname,
 		"action":          data.Action,
 		"output_size":     len(output),
-	})
+	}, key)
 }
 
-func postQueryResult(client *tenant.Client, payloadID int64, responseData map[string]any) {
+func postQueryResult(client *tenant.Client, payloadID int64, responseData map[string]any, key []byte) {
 	body := map[string]any{
 		"payload_id":    payloadID,
 		"response_data": responseData,
 	}
-	resp, err := client.PostJSON(tenant.URL("/api/agent/devicemanager/query-response"), body)
+	resp, err := client.PostEncryptedJSON(tenant.URL("/api/agent/devicemanager/query-response"), body, key)
 	if err != nil {
 		slog.Error("devicequery: failed to post result", "id", payloadID, "err", err)
 		return
@@ -170,9 +178,9 @@ func postQueryResult(client *tenant.Client, payloadID int64, responseData map[st
 	}
 }
 
-func postQueryError(client *tenant.Client, payloadID int64, message string) {
+func postQueryError(client *tenant.Client, payloadID int64, message string, key []byte) {
 	postQueryResult(client, payloadID, map[string]any{
 		"status": "error",
 		"error":  message,
-	})
+	}, key)
 }
