@@ -129,12 +129,13 @@ func Render(dataDir string, probeID int64, outputPath string) error {
 	cmd := exec.Command(rrdtoolPath(), "graph", pngFile,
 		"--imgformat", "PNG",
 		"--width", "850",
-		"--height", "150",
+		"--height", "200",
 		"--start", "-86400",
 		"--end", "now",
 		"--title", fmt.Sprintf("Probe %d – last 24 h", probeID),
 		"--vertical-label", "ms",
 		"--lower-limit", "0",
+		"--rigid",
 		"--slope-mode",
 		// Light theme.
 		"--color", "BACK#ffffff",
@@ -149,16 +150,18 @@ func Render(dataDir string, probeID int64, outputPath string) error {
 		fmt.Sprintf("DEF:min=%s:min:MIN", rrdFile),
 		fmt.Sprintf("DEF:max=%s:max:MAX", rrdFile),
 		fmt.Sprintf("DEF:loss=%s:loss:AVERAGE", rrdFile),
-		// Smoke band: transparent base + translucent fill from min→max.
+		// Smoke band: transparent base anchored at min, then fill stacked on
+		// top to reach max. Without STACK, smoke would draw from 0 to (max-min)
+		// instead of from min to max, disconnecting it from the latency line.
 		"CDEF:smoke=max,min,-",
 		"AREA:min#00000000",
-		"AREA:smoke#0099cc55:Smoke ",
-		// Average RTT line.
-		"LINE1:avg#00cc00:Average",
+		"AREA:smoke#0099cc80:Jitter :STACK",
+		// Average RTT line (2px for legibility).
+		"LINE2:avg#007700:Avg RTT",
 		// Legend.
 		`GPRINT:avg:LAST: Last\: %6.2lf ms`,
 		`GPRINT:avg:AVERAGE: Avg\: %6.2lf ms`,
-		`GPRINT:avg:MAX: Max\: %6.2lf ms\n`,
+		`GPRINT:avg:MAX: Peak\: %6.2lf ms\n`,
 		`GPRINT:loss:AVERAGE:Loss\: %.1lf%%\n`,
 	)
 	cmd.Dir = GraphDir(dataDir)

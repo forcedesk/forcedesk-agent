@@ -54,18 +54,25 @@ func fpingPath() string {
 	return filepath.Join(filepath.Dir(exe), "fping.exe")
 }
 
-// generatePingMetrics runs fping.exe and returns min, avg, max RTT (ms) and
-// packet loss percentage for the given host. All are nil on error or if fping
-// cannot be found. RTT values are nil when no packets were received (host down).
-func generatePingMetrics(host string) (avg, minMS, maxMS *float64, loss *int) {
+// fpingRun executes fping against host, sending count pings with intervalMS
+// milliseconds between each. Pass intervalMS=0 to use fping's default (1 s).
+// Returns avg, min, max RTT (ms) and packet loss. RTT pointers are nil when no
+// packets were received. All return values are nil on parse error.
+func fpingRun(host string, count, intervalMS int) (avg, minMS, maxMS *float64, loss *int) {
 	if !isValidHostname(host) {
 		slog.Error("monitoring: invalid hostname for ping metrics", "host", host)
 		return nil, nil, nil, nil
 	}
 
+	args := []string{"-c", strconv.Itoa(count)}
+	if intervalMS > 0 {
+		args = append(args, "-p", strconv.Itoa(intervalMS))
+	}
+	args = append(args, "-q", host)
+
 	// fping writes its per-host summary to stderr regardless of exit code.
 	// A non-zero exit simply means some/all hosts were unreachable.
-	cmd := exec.Command(fpingPath(), "-c", "3", "-q", host)
+	cmd := exec.Command(fpingPath(), args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Run() //nolint:errcheck
@@ -99,6 +106,19 @@ func generatePingMetrics(host string) (avg, minMS, maxMS *float64, loss *int) {
 	}
 
 	return avg, minMS, maxMS, loss
+}
+
+// generatePingMetrics runs a fast 3-ping check used for server status reporting.
+// Returns avg RTT and packet loss only; min/max are discarded.
+func generatePingMetrics(host string) (avg *float64, loss *int) {
+	a, _, _, l := fpingRun(host, 3, 0)
+	return a, l
+}
+
+// generateGraphMetrics runs a 20-ping check at 100 ms intervals (~2 s total)
+// to capture enough jitter for a meaningful smokeping smoke band.
+func generateGraphMetrics(host string) (avg, minMS, maxMS *float64, loss *int) {
+	return fpingRun(host, 20, 100)
 }
 
 // MonitoringService fetches monitoring probe configurations from the ForceDesk
@@ -137,12 +157,14 @@ func MonitoringService() {
 	}
 	slog.Debug("monitoring: total probes", "count", len(probes))
 
-	// probeRecord carries both the server-facing result and the RTT values
-	// needed for local graph rendering.
+	// probeRecord carries the server-facing result (from the fast 3-ping check)
+	// and the graph-specific RTT values (from the thorough 20-ping check).
 	type probeRecord struct {
-		result probeResult
-		minMS  *float64
-		maxMS  *float64
+		result     probeResult
+		graphAvg   *float64
+		graphMinMS *float64
+		graphMaxMS *float64
+		graphLoss  int
 	}
 
 	var (
@@ -157,7 +179,8 @@ func MonitoringService() {
 			defer wg.Done()
 			slog.Debug("monitoring: running probe", "probe_id", probe.ProbeID, "host", probe.Host, "check_type", probe.CheckType, "port", probe.Port)
 
-			avg, minMS, maxMS, loss := generatePingMetrics(probe.Host)
+			// Fast check — 3 pings, result sent to server.
+			avg, loss := generatePingMetrics(probe.Host)
 			slog.Info("monitoring: ping metrics", "probe_id", probe.ProbeID, "ping_data", avg, "packet_loss_data", loss)
 
 			var status string
@@ -175,6 +198,13 @@ func MonitoringService() {
 				}
 			}
 
+			// Thorough check — 20 pings at 100 ms intervals, used only for graphs.
+			gAvg, gMin, gMax, gLoss := generateGraphMetrics(probe.Host)
+			graphLoss := 0
+			if gLoss != nil {
+				graphLoss = *gLoss
+			}
+
 			slog.Debug("monitoring: probe result", "probe_id", probe.ProbeID, "host", probe.Host, "status", status)
 
 			mu.Lock()
@@ -185,8 +215,10 @@ func MonitoringService() {
 					PacketLossData: loss,
 					Status:         status,
 				},
-				minMS: minMS,
-				maxMS: maxMS,
+				graphAvg:   gAvg,
+				graphMinMS: gMin,
+				graphMaxMS: gMax,
+				graphLoss:  graphLoss,
 			})
 			mu.Unlock()
 		}(p)
@@ -226,17 +258,13 @@ func MonitoringService() {
 	now := time.Now()
 	for _, rec := range records {
 		id := rec.result.ID
-		loss := 0
-		if rec.result.PacketLossData != nil {
-			loss = *rec.result.PacketLossData
-		}
 
 		if err := graph.EnsureRRD(config.DataDir(), id); err != nil {
 			slog.Error("monitoring: failed to ensure RRD", "probe_id", id, "err", err)
 			continue
 		}
 
-		if err := graph.Update(config.DataDir(), id, now, rec.result.PingData, rec.minMS, rec.maxMS, loss); err != nil {
+		if err := graph.Update(config.DataDir(), id, now, rec.graphAvg, rec.graphMinMS, rec.graphMaxMS, rec.graphLoss); err != nil {
 			slog.Error("monitoring: failed to update RRD", "probe_id", id, "err", err)
 			continue
 		}
