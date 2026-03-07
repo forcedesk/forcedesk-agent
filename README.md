@@ -8,5 +8,5 @@ This Windows binary replaces the dedicated Linux VM.
 
 ## Building for Windows
 
-make clean
-make build
+`make clean`
+`make build`
