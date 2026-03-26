@@ -39,6 +39,8 @@ Source: "fping.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cygwin1.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "lib\rrdtool\*"; DestDir: "{app}"; Flags: ignoreversion
+Source: "lib\bpacclient.msi"; DestDir: "{app}"; Flags: ignoreversion
+Source: "lib\brothersdk.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
 ; Install the Windows Service (auto-start, LocalSystem).

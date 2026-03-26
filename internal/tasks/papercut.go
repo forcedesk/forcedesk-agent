@@ -169,7 +169,7 @@ func pcXMLRequest(apiKey, username, property string) string {
 <methodCall>
   <methodName>api.getUserProperty</methodName>
   <params>
-    <param><value><string>%s</string></value></param>
+    <param><value><string></string></value></param>
     <param><value><string>%s</string></value></param>
     <param><value><string>%s</string></value></param>
   </params>

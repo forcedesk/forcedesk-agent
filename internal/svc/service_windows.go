@@ -239,7 +239,7 @@ func buildScheduler() *scheduler.Scheduler {
 	})
 	s.Add(&scheduler.Task{
 		Name:     "commandqueue",
-		Interval: 1 * time.Minute,
+		Interval: 15 * time.Second,
 		Fn:       tasks.CommandQueueService,
 	})
 	s.Add(&scheduler.Task{

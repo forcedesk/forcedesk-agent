@@ -12,8 +12,11 @@ type commandQueueItem struct {
 }
 
 type commandPayload struct {
-	Process bool   `json:"process"`
-	Action  string `json:"action"`
+	Process          bool    `json:"process"`
+	Action           string  `json:"action"`
+	SharedAccount    string  `json:"shared_account"`
+	RequestedBalance float64 `json:"requested_balance"`
+	AdjustmentReason string  `json:"adjustment_reason"`
 }
 
 // CommandQueueService polls the ForceDesk server for pending commands and executes them.
@@ -57,6 +60,20 @@ func CommandQueueService() {
 				slog.Info("commandqueue: triggering edustar command", "action", item.PayloadData.Action)
 				go EduStarCommand(item.PayloadData.Action)
 			}
+
+		case "get-papercut-shared-accounts":
+			slog.Info("commandqueue: triggering papercut shared accounts fetch")
+			go PapercutGetSharedAccounts()
+
+		case "set-papercut-shared-account-balance":
+			slog.Info("commandqueue: setting papercut shared account balance",
+				"account", item.PayloadData.SharedAccount,
+				"balance", item.PayloadData.RequestedBalance)
+			go PapercutSetSharedAccountBalance(
+				item.PayloadData.SharedAccount,
+				item.PayloadData.RequestedBalance,
+				item.PayloadData.AdjustmentReason,
+			)
 
 		default:
 			slog.Warn("commandqueue: unknown command type", "type", item.Type)
