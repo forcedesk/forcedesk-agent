@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -72,7 +73,12 @@ func fpingRun(host string, count, intervalMS int) (avg, minMS, maxMS *float64, l
 
 	// fping writes its per-host summary to stderr regardless of exit code.
 	// A non-zero exit simply means some/all hosts were unreachable.
-	cmd := exec.Command(fpingPath(), args...)
+	// The timeout is generous: each ping takes at most ~1 s (or intervalMS), plus a 5 s buffer.
+	pingDuration := time.Duration(count) * time.Duration(max(intervalMS, 1000)) * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), pingDuration+5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, fpingPath(), args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Run() //nolint:errcheck

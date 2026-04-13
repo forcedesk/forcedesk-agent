@@ -36,6 +36,10 @@ var modernKex = []string{
 	"diffie-hellman-group14-sha256",
 }
 
+// commandTimeout is the maximum time allowed for a command to produce output after
+// the SSH session is established. This is separate from the dial timeout.
+const commandTimeout = 60 * time.Second
+
 // RunCommand opens an SSH session to the target host, executes the command, and returns the output.
 // Supports both modern and legacy SSH configurations based on the Legacy flag.
 func RunCommand(cfg Config, command string) (string, error) {
@@ -83,14 +87,30 @@ func RunCommand(cfg Config, command string) (string, error) {
 	}
 	defer session.Close()
 
-	out, err := session.Output(command)
-	if err != nil {
-		// Some devices close the connection immediately after sending output.
-		// Treat non-empty output with an error as successful execution.
-		if len(out) > 0 {
-			return string(out), nil
-		}
-		return "", fmt.Errorf("run command on %s: %w", cfg.Host, err)
+	type result struct {
+		out []byte
+		err error
 	}
-	return string(out), nil
+	ch := make(chan result, 1)
+	go func() {
+		out, err := session.Output(command)
+		ch <- result{out, err}
+	}()
+
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			// Some devices close the connection immediately after sending output.
+			// Treat non-empty output with an error as successful execution.
+			if len(r.out) > 0 {
+				return string(r.out), nil
+			}
+			return "", fmt.Errorf("run command on %s: %w", cfg.Host, r.err)
+		}
+		return string(r.out), nil
+	case <-time.After(commandTimeout):
+		// Closing the session unblocks session.Output in the goroutine above.
+		session.Close()
+		return "", fmt.Errorf("command timed out on %s after %s", addr, commandTimeout)
+	}
 }

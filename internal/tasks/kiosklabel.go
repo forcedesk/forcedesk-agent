@@ -1,11 +1,13 @@
 package tasks
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -83,7 +85,10 @@ func printKioskLabel(vbsFile, labelFile string, label kioskLabel) error {
 	args := []string{vbsFile, labelFile, label.QRData, label.NameData, label.BarcodeData, label.DateData}
 	slog.Debug("kiosk-label: cscript", "args", args)
 
-	cmd := exec.Command("cscript", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "cscript", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		slog.Error("kiosk-label: cscript failed", "output", string(out), "err", err)
