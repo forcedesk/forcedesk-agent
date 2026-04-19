@@ -45,7 +45,7 @@ type Client struct {
 	password   string
 }
 
-// New creates an unauthenticated STMC client.
+// New creates an unauthenticated STMC client..
 // authMode controls which authentication method Login uses:
 // "ntlm" or "form" force that method; "" (empty) tries NTLM first then falls back to form.
 // Call Login before making API requests.
