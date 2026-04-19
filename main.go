@@ -180,6 +180,7 @@ func printEduStarUsage(exe string) {
 	fmt.Fprintln(os.Stderr, "  populate-crt-accounts      Sync CRT accounts to tenant")
 	fmt.Fprintln(os.Stderr, "  expire-crt-accounts        Disable CRT accounts and scramble passwords")
 	fmt.Fprintln(os.Stderr, "  enable-crt-accounts        Enable CRT accounts and set daily passwords")
+	fmt.Fprintln(os.Stderr, "  expire-service-accounts    Disable service accounts and scramble passwords")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Flags:")
 	fmt.Fprintln(os.Stderr, "  --school <id>        Override the configured school code")

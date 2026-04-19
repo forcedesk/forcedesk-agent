@@ -64,6 +64,12 @@ type crtAccount struct {
 	LdapDN string `json:"ldap_dn"`
 }
 
+// serviceAccount is a managed service account fetched from the tenant for expire operations.
+type serviceAccount struct {
+	Login  string `json:"login"`
+	LdapDN string `json:"ldap_dn"`
+}
+
 // EduStarCLIOpts holds the optional flags parsed from the CLI for the edustar subcommand.
 type EduStarCLIOpts struct {
 	School      string // overrides the configured school code
@@ -196,6 +202,8 @@ func EduStarCommand(action string) {
 		expireCRT(tc, stmc, cfg)
 	case "enable-crt-accounts":
 		enableCRT(tc, stmc, cfg)
+	case "expire-service-accounts":
+		expireServiceAccounts(tc, stmc, cfg)
 	default:
 		slog.Warn("edustar: unknown action", "action", action)
 	}
@@ -350,6 +358,38 @@ func fetchCRTAccounts(tc *tenant.Client) ([]crtAccount, error) {
 		return nil, err
 	}
 	return accounts, nil
+}
+
+func fetchServiceAccounts(tc *tenant.Client) ([]serviceAccount, error) {
+	var accounts []serviceAccount
+	if err := tc.GetJSON(tenant.URL("/api/agent/edustar/service-accounts"), &accounts); err != nil {
+		return nil, err
+	}
+	return accounts, nil
+}
+
+func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
+	slog.Info("edustar: expiring service accounts")
+
+	accounts, err := fetchServiceAccounts(tc)
+	if err != nil {
+		slog.Error("edustar: failed to fetch service accounts", "err", err)
+		return
+	}
+
+	for _, acc := range accounts {
+		if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+			slog.Error("edustar: disable service account failed", "login", acc.Login, "err", err)
+			continue
+		}
+		// Scramble the password so the account cannot be used even if manually re-enabled.
+		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
+			slog.Error("edustar: password scramble failed", "login", acc.Login, "err", err)
+		}
+		slog.Info("edustar: service account expired", "login", acc.Login)
+	}
+
+	slog.Info("edustar: service account expire complete", "count", len(accounts))
 }
 
 func generatePassword() (string, error) {
@@ -612,6 +652,28 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		} else {
 			fmt.Println("No accounts were updated.")
 		}
+
+	case "expire-service-accounts":
+		accounts, err := fetchServiceAccounts(tc)
+		if err != nil {
+			cliError(fmt.Errorf("fetch service accounts: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(accounts, nil)
+			break
+		}
+		fmt.Printf("Expiring %d service accounts...\n", len(accounts))
+		for _, acc := range accounts {
+			if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+				fmt.Fprintf(os.Stderr, "  disable %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
+				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+			}
+			fmt.Printf("  expired: %s\n", acc.Login)
+		}
+		fmt.Printf("Done. %d service accounts expired.\n", len(accounts))
 
 	default:
 		fmt.Fprintf(os.Stderr, "edustar: unknown action %q\n", action)
