@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tasks
 
 import (
@@ -89,12 +91,16 @@ func PapercutService() {
 		return
 	}
 
+	// Fetch the PaperCut server URL and API key from the tenant (encrypted).
+	// These may differ per site and are not stored in local config.toml.
 	pcCfg, err := fetchPapercutConfig(client)
 	if err != nil {
 		slog.Error("papercut: failed to resolve config", "err", err)
 		return
 	}
 
+	// Fetch the staff and student lists from the tenant so we know which
+	// usernames to query in PaperCut.
 	users, err := fetchPapercutUsers(client)
 	if err != nil {
 		slog.Error("papercut: failed to fetch users", "err", err)
@@ -104,6 +110,9 @@ func PapercutService() {
 
 	payload := pcPayload{}
 
+	// Query PaperCut for each staff member's PIN (secondary-card-number) and
+	// account balance. Both are optional — skip the record only when both are
+	// absent, as PaperCut may not have a PIN set for every user.
 	for _, s := range users.Staff {
 		slog.Debug("papercut: querying staff member", "username", s.Username)
 		pin, err := pcGetProperty(pcCfg.APIURL, pcCfg.APIKey, s.Username, "secondary-card-number")
@@ -116,6 +125,7 @@ func PapercutService() {
 		}
 		slog.Debug("papercut: staff result", "username", s.Username, "has_pin", pin != nil, "has_balance", bal != nil)
 
+		// Skip users with no data in PaperCut to keep the payload lean.
 		if pin == nil && bal == nil {
 			continue
 		}
@@ -123,6 +133,8 @@ func PapercutService() {
 		slog.Info("papercut: processed staff", "username", s.Username)
 	}
 
+	// Same process for students. Note: the JSON field is "login" for students
+	// vs "username" for staff to match the server's expected schema.
 	for _, s := range users.Students {
 		slog.Debug("papercut: querying student", "username", s.Username)
 		pin, err := pcGetProperty(pcCfg.APIURL, pcCfg.APIKey, s.Username, "secondary-card-number")
@@ -147,6 +159,7 @@ func PapercutService() {
 		return
 	}
 
+	// Encrypt the payload before transmission; it contains PINs and balances.
 	key, err := config.Get().Tenant.GetEncryptionKey()
 	if err != nil {
 		slog.Error("papercut: failed to get encryption key", "err", err)
@@ -164,6 +177,9 @@ func PapercutService() {
 }
 
 // pcXMLRequest builds an XML-RPC getUserProperty request body for PaperCut API calls.
+// The PaperCut XML-RPC signature is: getUserProperty(authToken, username, property).
+// The first parameter (authToken) is intentionally left empty — PaperCut accepts
+// the API key via the second parameter in this calling convention.
 func pcXMLRequest(apiKey, username, property string) string {
 	return fmt.Sprintf(`<?xml version="1.0"?>
 <methodCall>
@@ -176,6 +192,9 @@ func pcXMLRequest(apiKey, username, property string) string {
 </methodCall>`, xmlEscape(apiKey), xmlEscape(username), xmlEscape(property))
 }
 
+// xmlEscape escapes the minimum set of characters required for embedding values
+// inside XML element content. Using encoding/xml.EscapeText would be cleaner but
+// requires an io.Writer; this is simpler for inline string formatting.
 func xmlEscape(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
@@ -207,10 +226,13 @@ type pcFault struct {
 	Value string `xml:"value"`
 }
 
+// pcCall sends a getUserProperty XML-RPC request to the PaperCut server and returns
+// the scalar string value, unwrapping any XML-RPC type wrapper tags.
 func pcCall(apiURL, apiKey, username, property string) (string, error) {
 	body := pcXMLRequest(apiKey, username, property)
 
-	// Create request with context and timeout.
+	// Use a context-bound request so a slow or unresponsive PaperCut server
+	// does not block the goroutine indefinitely during a bulk user sync.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -231,11 +253,14 @@ func pcCall(apiURL, apiKey, username, property string) (string, error) {
 		return "", err
 	}
 
+	// Unmarshal the XML-RPC envelope into our response struct.
 	var result pcMethodResponse
 	if err := xml.Unmarshal(raw, &result); err != nil {
 		return "", fmt.Errorf("xml parse: %w", err)
 	}
 
+	// An XML-RPC fault means PaperCut returned an application-level error
+	// (e.g. unknown user, insufficient permissions).
 	if result.Fault != nil {
 		return "", fmt.Errorf("XML-RPC fault: %s", result.Fault.Value)
 	}
@@ -243,7 +268,9 @@ func pcCall(apiURL, apiKey, username, property string) (string, error) {
 		return "", fmt.Errorf("empty XML-RPC response")
 	}
 
-	// Extract the value from InnerXML, which may be wrapped (e.g., "<string>1234</string>") or bare (e.g., "1234").
+	// The InnerXML of a <value> element may be a typed wrapper such as
+	// <string>1234</string> or a bare text node like just "1234".
+	// Strip the three value types we expect so callers always get a plain string.
 	inner := strings.TrimSpace(result.Params.Param.Value.InnerXML)
 	inner = stripXMLTag(inner, "string")
 	inner = stripXMLTag(inner, "double")
@@ -251,6 +278,9 @@ func pcCall(apiURL, apiKey, username, property string) (string, error) {
 	return strings.TrimSpace(inner), nil
 }
 
+// stripXMLTag removes a surrounding <tag>…</tag> wrapper from s if present.
+// PaperCut XML-RPC responses may return bare values or type-wrapped values
+// (e.g. <string>1234</string>); this normalises both forms.
 func stripXMLTag(s, tag string) string {
 	open := "<" + tag + ">"
 	close := "</" + tag + ">"

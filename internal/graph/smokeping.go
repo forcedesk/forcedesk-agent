@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 // Package graph manages per-probe RRD databases and renders Smokeping-style
 // latency graphs as PNG files via rrdtool.
 //

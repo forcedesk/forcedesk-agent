@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tenant
 
 import (
@@ -149,16 +151,21 @@ func (c *Client) GetEncryptedJSON(url string, dst any, key []byte) error {
 		return fmt.Errorf("read encrypted response: %w", err)
 	}
 
+	// Initialise the AEAD cipher with the shared key (always 32 bytes for ChaCha20-Poly1305).
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
 		return fmt.Errorf("create cipher: %w", err)
 	}
 
+	// Wire format: first NonceSize (12) bytes are the nonce; the rest is ciphertext+Poly1305 tag.
+	// Verify minimum length before slicing to avoid a panic.
 	ns := aead.NonceSize()
 	if len(body) < ns {
 		return fmt.Errorf("encrypted response too short (%d bytes)", len(body))
 	}
 
+	// aead.Open authenticates and decrypts in one step. A wrong key or tampered
+	// ciphertext produces an error here rather than silently returning garbage.
 	plaintext, err := aead.Open(nil, body[:ns], body[ns:], nil)
 	if err != nil {
 		return fmt.Errorf("decrypt response: %w", err)
@@ -186,6 +193,7 @@ func (c *Client) GetEncryptedBytes(url string, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("read encrypted response: %w", err)
 	}
 
+	// Same nonce||ciphertext+tag wire format as GetEncryptedJSON.
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
 		return nil, fmt.Errorf("create cipher: %w", err)
@@ -223,11 +231,16 @@ func (c *Client) PostEncryptedJSON(url string, v any, key []byte) (*http.Respons
 		return nil, fmt.Errorf("create cipher: %w", err)
 	}
 
+	// Generate a fresh cryptographically random nonce for every request.
+	// Reusing a nonce with the same key would completely break ChaCha20-Poly1305 security.
 	nonce := make([]byte, aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, fmt.Errorf("generate nonce: %w", err)
 	}
 
+	// aead.Seal(dst, nonce, plaintext, aad): passing nonce as dst prepends it to
+	// the ciphertext+tag in a single allocation, producing the nonce||ciphertext+tag
+	// wire format expected by the server's decrypt routine.
 	ciphertext := aead.Seal(nonce, nonce, plaintext, nil)
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(ciphertext))
@@ -235,6 +248,7 @@ func (c *Client) PostEncryptedJSON(url string, v any, key []byte) (*http.Respons
 		return nil, err
 	}
 	c.applyHeaders(req)
+	// Override Content-Type: the body is raw binary, not JSON.
 	req.Header.Set("Content-Type", "application/octet-stream")
 	return c.http.Do(req)
 }
@@ -247,6 +261,8 @@ func (c *Client) PostFile(url, filename string, data []byte) (*http.Response, er
 		c.limiter.Wait()
 	}
 
+	// Build the multipart body in memory. The field name "file" is the convention
+	// expected by the server's multipart parser (matches the Laravel/PHP side).
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	fw, err := mw.CreateFormFile("file", filename)
@@ -256,13 +272,15 @@ func (c *Client) PostFile(url, filename string, data []byte) (*http.Response, er
 	if _, err := fw.Write(data); err != nil {
 		return nil, fmt.Errorf("write file data: %w", err)
 	}
+	// Close must be called before reading buf; it writes the closing boundary.
 	mw.Close()
 
 	req, err := http.NewRequest(http.MethodPost, url, &buf)
 	if err != nil {
 		return nil, err
 	}
-	// Apply auth headers then override Content-Type for multipart.
+	// applyHeaders sets Content-Type to application/json; override it with the
+	// multipart boundary that the server needs to parse the form fields correctly.
 	c.applyHeaders(req)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	return c.http.Do(req)

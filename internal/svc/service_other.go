@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 //go:build !windows
 
 package svc

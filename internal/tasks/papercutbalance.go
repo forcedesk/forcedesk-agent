@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tasks
 
 import (
@@ -82,6 +84,9 @@ type pcSharedAccountItem struct {
 
 // pcListSharedAccounts calls api.listSharedAccounts and returns all account names.
 func pcListSharedAccounts(apiURL, apiKey string) ([]string, error) {
+	// api.listSharedAccounts(authToken, offset, limit): offset=0, limit=9999 fetches
+	// everything in a single call. PaperCut's API is paginated but most deployments
+	// have far fewer than 9999 shared accounts, so one call is sufficient.
 	body := fmt.Sprintf(`<?xml version="1.0"?>
 <methodCall>
   <methodName>api.listSharedAccounts</methodName>
@@ -92,6 +97,7 @@ func pcListSharedAccounts(apiURL, apiKey string) ([]string, error) {
   </params>
 </methodCall>`, xmlEscape(apiKey))
 
+	// Allow more time than a scalar call: the response array may be large.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -112,6 +118,9 @@ func pcListSharedAccounts(apiURL, apiKey string) ([]string, error) {
 		return nil, err
 	}
 
+	// Unmarshal the array-valued XML-RPC response into our dedicated struct.
+	// The standard pcMethodResponse only handles scalar values; we need the
+	// separate pcSharedAccountsListResponse to traverse the nested array elements.
 	var result pcSharedAccountsListResponse
 	if err := xml.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("xml parse: %w", err)
@@ -125,8 +134,11 @@ func pcListSharedAccounts(apiURL, apiKey string) ([]string, error) {
 
 	var accounts []string
 	for _, item := range result.Params.Param.Value.Array.Items {
+		// Strip type wrapper (e.g. <string>…</string>) to get the bare account name.
 		s := strings.TrimSpace(item.InnerXML)
 		s = stripXMLTag(s, "string")
+		// PaperCut HTML-encodes account names that contain characters like '&' or '<'
+		// (e.g. "Science &amp; Tech" → "Science & Tech"). Unescape before storing.
 		s = html.UnescapeString(strings.TrimSpace(s))
 		if s != "" {
 			accounts = append(accounts, s)
@@ -187,10 +199,12 @@ type pcSharedAccountRecord struct {
 	Balance float64 `json:"balance"`
 }
 
+// pcSharedAccountsPayload is the payload sent to the tenant after listing all shared accounts.
 type pcSharedAccountsPayload struct {
 	Accounts []pcSharedAccountRecord `json:"accounts"`
 }
 
+// pcSharedAccountBalancePayload is the payload sent to the tenant after updating a single account balance.
 type pcSharedAccountBalancePayload struct {
 	SharedAccount string  `json:"shared_account"`
 	Balance       float64 `json:"balance"`
@@ -266,6 +280,10 @@ func PapercutSetSharedAccountBalance(accountName string, requestedBalance float6
 		return
 	}
 
+	// Read the current balance before modifying it. The operation is a TOP-UP,
+	// not an absolute set: requestedBalance is the amount to ADD to the current
+	// balance, not the target value. Fetching first lets us compute the new total
+	// and log the delta clearly.
 	currentBalance, err := pcGetSharedAccountBalance(pcCfg.APIURL, pcCfg.APIKey, accountName)
 	if err != nil {
 		slog.Error("papercut: failed to get current balance before top-up", "account", accountName, "err", err)
@@ -273,6 +291,7 @@ func PapercutSetSharedAccountBalance(accountName string, requestedBalance float6
 	}
 	slog.Debug("papercut: current balance before top-up", "account", accountName, "current", currentBalance, "topup", requestedBalance)
 
+	// Add the requested top-up amount to the existing balance to get the new total.
 	newBalance := currentBalance + requestedBalance
 
 	if err := pcSetSharedAccountBalance(pcCfg.APIURL, pcCfg.APIKey, accountName, newBalance, adjustmentReason); err != nil {
@@ -281,6 +300,9 @@ func PapercutSetSharedAccountBalance(accountName string, requestedBalance float6
 	}
 	slog.Info("papercut: shared account balance set", "account", accountName, "old", currentBalance, "topup", requestedBalance, "new", newBalance)
 
+	// Re-fetch the balance after setting it to confirm what PaperCut actually
+	// stored. PaperCut may round or cap the value; reporting the confirmed balance
+	// (rather than the computed newBalance) ensures the tenant's record is accurate.
 	bal, err := pcGetSharedAccountBalance(pcCfg.APIURL, pcCfg.APIKey, accountName)
 	if err != nil {
 		slog.Error("papercut: failed to get updated balance", "account", accountName, "err", err)
@@ -293,6 +315,7 @@ func PapercutSetSharedAccountBalance(accountName string, requestedBalance float6
 		return
 	}
 
+	// Encrypt the confirmed balance before posting; balance data is financially sensitive.
 	payload := pcSharedAccountBalancePayload{SharedAccount: accountName, Balance: bal}
 	resp, err := client.PostEncryptedJSON(tenant.URL("/api/agent/ingest/papercut-shared-account-balance"), payload, key)
 	if err != nil {

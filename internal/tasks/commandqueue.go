@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tasks
 
 import (
@@ -6,11 +8,14 @@ import (
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
 
+// commandQueueItem is a single entry returned by /api/agent/command-queues.
 type commandQueueItem struct {
 	Type        string         `json:"type"`
 	PayloadData commandPayload `json:"payload_data"`
 }
 
+// commandPayload carries the parameters for a queued command. Only fields
+// relevant to the specific command Type are populated by the server.
 type commandPayload struct {
 	Process          bool    `json:"process"`
 	Action           string  `json:"action"`

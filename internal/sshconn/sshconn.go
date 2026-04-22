@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package sshconn
 
 import (
@@ -43,16 +45,25 @@ const commandTimeout = 60 * time.Second
 // RunCommand opens an SSH session to the target host, executes the command, and returns the output.
 // Supports both modern and legacy SSH configurations based on the Legacy flag.
 func RunCommand(cfg Config, command string) (string, error) {
+	// Default to the standard SSH port when the caller leaves Port at zero.
 	port := cfg.Port
 	if port == 0 {
 		port = 22
 	}
 
+	// Select the appropriate key-exchange list. Legacy mode adds weaker
+	// algorithms (e.g. diffie-hellman-group1-sha1) required by older Cisco
+	// and MikroTik gear that does not support modern curves.
 	kex := modernKex
 	if cfg.Legacy {
 		kex = legacyKex
 	}
 
+	// Build the SSH client config. HostKeyCallback is intentionally permissive
+	// because network devices are identified by IP/hostname from the tenant
+	// payload, not by a pre-shared host key.
+	// The CBC ciphers and legacy MACs (hmac-sha1*) are included for the same
+	// compatibility reason as legacyKex — many managed switches only offer them.
 	sshCfg := &gossh.ClientConfig{
 		User: cfg.Username,
 		Auth: []gossh.AuthMethod{
@@ -74,6 +85,7 @@ func RunCommand(cfg Config, command string) (string, error) {
 		},
 	}
 
+	// Open the TCP connection and perform the SSH handshake.
 	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
 	client, err := gossh.Dial("tcp", addr, sshCfg)
 	if err != nil {
@@ -81,12 +93,16 @@ func RunCommand(cfg Config, command string) (string, error) {
 	}
 	defer client.Close()
 
+	// Each command needs its own session; sessions are single-use in the SSH protocol.
 	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("new session: %w", err)
 	}
 	defer session.Close()
 
+	// Run the command in a goroutine so we can impose a hard timeout via
+	// a select. session.Output blocks until the remote side closes the channel,
+	// which some devices never do — without this the call could hang forever.
 	type result struct {
 		out []byte
 		err error
@@ -100,8 +116,9 @@ func RunCommand(cfg Config, command string) (string, error) {
 	select {
 	case r := <-ch:
 		if r.err != nil {
-			// Some devices close the connection immediately after sending output.
-			// Treat non-empty output with an error as successful execution.
+			// Some devices close the connection immediately after sending output,
+			// causing session.Output to return io.EOF. If there is output, the
+			// command succeeded — treat any non-empty result as success.
 			if len(r.out) > 0 {
 				return string(r.out), nil
 			}
@@ -109,7 +126,8 @@ func RunCommand(cfg Config, command string) (string, error) {
 		}
 		return string(r.out), nil
 	case <-time.After(commandTimeout):
-		// Closing the session unblocks session.Output in the goroutine above.
+		// Closing the session unblocks session.Output in the goroutine above,
+		// allowing it to exit cleanly rather than leaking the goroutine.
 		session.Close()
 		return "", fmt.Errorf("command timed out on %s after %s", addr, commandTimeout)
 	}

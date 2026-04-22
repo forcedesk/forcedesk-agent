@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 // Package edustar implements an authenticated HTTP client for the
 // F5 eduSTAR School Technology Management Centre (STMC) API at
 // https://stmc.education.vic.gov.au.
@@ -84,6 +86,8 @@ func (c *Client) Login(username, password string) error {
 	}
 }
 
+// ntlmLogin authenticates by performing an NTLM-negotiated GET to the STMC base URL.
+// Credentials are prepended with the domain ("EDU001\") as required by the F5 gateway.
 func (c *Client) ntlmLogin(username, password string) error {
 	req, err := http.NewRequest(http.MethodGet, baseURL, nil)
 	if err != nil {
@@ -108,6 +112,8 @@ func (c *Client) ntlmLogin(username, password string) error {
 	return nil
 }
 
+// formLogin authenticates via a two-step form handshake: GET base URL to seed session
+// cookies, then POST credentials to /my.policy. Only works from within the eduSTAR subnet.
 func (c *Client) formLogin(username, password string) error {
 	// Step 1: GET base URL to initialise session cookies.
 	initReq, _ := http.NewRequest(http.MethodGet, baseURL, nil)
@@ -158,6 +164,7 @@ func (c *Client) formLogin(username, password string) error {
 }
 
 // request sends an authenticated request to the STMC API and returns the raw response body.
+// The school ID, when non-empty, is sent as the emc-sch-id request header.
 func (c *Client) request(method, path, school string, data any) ([]byte, error) {
 	var bodyReader io.Reader
 	if data != nil {
@@ -200,6 +207,7 @@ func (c *Client) request(method, path, school string, data any) ([]byte, error) 
 	return respBody, nil
 }
 
+// decode unmarshals b into a new value of type T.
 func decode[T any](b []byte) (T, error) {
 	var v T
 	return v, json.Unmarshal(b, &v)
@@ -209,6 +217,7 @@ func decode[T any](b []byte) (T, error) {
 // API methods — mirrors EduStarService.php
 // ============================================================
 
+// WhoAmI returns the currently authenticated user's profile. (GET /UserGet)
 func (c *Client) WhoAmI() (map[string]any, error) {
 	b, err := c.request("GET", "/UserGet", "", nil)
 	if err != nil {
@@ -217,6 +226,7 @@ func (c *Client) WhoAmI() (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// GetUser returns a user by their TO number or alias. (GET /UserGetByLogin/{id})
 func (c *Client) GetUser(id string) (map[string]any, error) {
 	b, err := c.request("GET", "/UserGetByLogin/"+url.PathEscape(id), "", nil)
 	if err != nil {
@@ -225,6 +235,7 @@ func (c *Client) GetUser(id string) (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// GetSchools returns all schools the authenticated user can manage. (GET /GetAllSchools)
 func (c *Client) GetSchools() ([]map[string]any, error) {
 	b, err := c.request("GET", "/GetAllSchools", "", nil)
 	if err != nil {
@@ -233,6 +244,7 @@ func (c *Client) GetSchools() ([]map[string]any, error) {
 	return decode[[]map[string]any](b)
 }
 
+// GetAllSchools returns the IDs of all enabled schools. (GET /SchGetAllEnabledIds)
 func (c *Client) GetAllSchools() ([]string, error) {
 	b, err := c.request("GET", "/SchGetAllEnabledIds", "", nil)
 	if err != nil {
@@ -241,6 +253,7 @@ func (c *Client) GetAllSchools() ([]string, error) {
 	return decode[[]string](b)
 }
 
+// GetStudents returns all students with full properties for the given school. (GET /SchGetStuds?fullProps=true)
 func (c *Client) GetStudents(school string) ([]map[string]any, error) {
 	b, err := c.request("GET", "/SchGetStuds?fullProps=true", school, nil)
 	if err != nil {
@@ -258,6 +271,7 @@ func (c *Client) GetStaff(school string) (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// GetTechnicians returns only the technicians (not staff) for the given school. (GET /SchGetTechs?includeStaff=false)
 func (c *Client) GetTechnicians(school string) (map[string]any, error) {
 	b, err := c.request("GET", "/SchGetTechs?includeStaff=false", school, nil)
 	if err != nil {
@@ -266,6 +280,7 @@ func (c *Client) GetTechnicians(school string) (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// GetGroups returns all groups for the given school. (GET /GpGetForSch)
 func (c *Client) GetGroups(school string) (map[string]any, error) {
 	b, err := c.request("GET", "/GpGetForSch", school, nil)
 	if err != nil {
@@ -274,6 +289,7 @@ func (c *Client) GetGroups(school string) (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// GetGroup returns the members of a specific group identified by DN and name. (GET /GpGetMems)
 func (c *Client) GetGroup(school, name, dn string) ([]map[string]any, error) {
 	path := fmt.Sprintf("/GpGetMems?gpDn=%s&gpName=%s", url.QueryEscape(dn), url.QueryEscape(name))
 	b, err := c.request("GET", path, school, nil)
@@ -283,6 +299,7 @@ func (c *Client) GetGroup(school, name, dn string) ([]map[string]any, error) {
 	return decode[[]map[string]any](b)
 }
 
+// GetCertificates returns computer group certificates for the given school. (GET /CompGetMg)
 func (c *Client) GetCertificates(school string) ([]map[string]any, error) {
 	b, err := c.request("GET", "/CompGetMg", school, nil)
 	if err != nil {
@@ -291,6 +308,7 @@ func (c *Client) GetCertificates(school string) ([]map[string]any, error) {
 	return decode[[]map[string]any](b)
 }
 
+// GetServiceAccounts returns all managed service accounts for the given school. (GET /SvcAccGetForSch)
 func (c *Client) GetServiceAccounts(school string) ([]map[string]any, error) {
 	b, err := c.request("GET", "/SvcAccGetForSch", school, nil)
 	if err != nil {
@@ -299,6 +317,7 @@ func (c *Client) GetServiceAccounts(school string) ([]map[string]any, error) {
 	return decode[[]map[string]any](b)
 }
 
+// GetNps returns the NPS (Network Policy Server) mapping for the given school. (GET /NpsMappingGetForSch)
 func (c *Client) GetNps(school string) (map[string]any, error) {
 	b, err := c.request("GET", "/NpsMappingGetForSch", school, nil)
 	if err != nil {
@@ -307,11 +326,14 @@ func (c *Client) GetNps(school string) (map[string]any, error) {
 	return decode[map[string]any](b)
 }
 
+// SetStudentPassword sets an explicit password on the student identified by DN. (POST /StudResetPwd)
 func (c *Client) SetStudentPassword(school, dn, password string) error {
 	_, err := c.request("POST", "/StudResetPwd", school, map[string]string{"dn": dn, "newPwd": password})
 	return err
 }
 
+// ResetStudentPassword resets the student's password to an auto-generated value and
+// returns the result details. (POST /StudBulkSetPwd with mode=auto)
 func (c *Client) ResetStudentPassword(school, dn string) ([]map[string]any, error) {
 	b, err := c.request("POST", "/StudBulkSetPwd", school, map[string]any{
 		"mode": "auto",
@@ -323,21 +345,25 @@ func (c *Client) ResetStudentPassword(school, dn string) ([]map[string]any, erro
 	return decode[[]map[string]any](b)
 }
 
+// AddToGroup adds a member to a group by their respective DNs. (POST /GpAddMem)
 func (c *Client) AddToGroup(school, groupDN, memberDN string) error {
 	_, err := c.request("POST", "/GpAddMem", school, map[string]string{"gpDn": groupDN, "memDn": memberDN})
 	return err
 }
 
+// RemoveFromGroup removes a member from a group by their respective DNs. (POST /GpRemoveMem)
 func (c *Client) RemoveFromGroup(school, groupDN, memberDN string) error {
 	_, err := c.request("POST", "/GpRemoveMem", school, map[string]string{"gpDn": groupDN, "memDn": memberDN})
 	return err
 }
 
+// DisableServiceAccount disables the service account identified by DN. (POST /SvcAccDisable)
 func (c *Client) DisableServiceAccount(school, dn string) error {
 	_, err := c.request("POST", "/SvcAccDisable", school, map[string]string{"dn": dn})
 	return err
 }
 
+// EnableServiceAccount re-enables the service account identified by DN. (POST /SvcAccEnable)
 func (c *Client) EnableServiceAccount(school, dn string) error {
 	_, err := c.request("POST", "/SvcAccEnable", school, map[string]string{"dn": dn})
 	return err

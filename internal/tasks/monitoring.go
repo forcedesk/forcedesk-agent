@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tasks
 
 import (
@@ -60,20 +62,26 @@ func fpingPath() string {
 // Returns avg, min, max RTT (ms) and packet loss. RTT pointers are nil when no
 // packets were received. All return values are nil on parse error.
 func fpingRun(host string, count, intervalMS int) (avg, minMS, maxMS *float64, loss *int) {
+	// Validate the hostname before passing it to an external process to
+	// prevent command injection through crafted hostnames.
 	if !isValidHostname(host) {
 		slog.Error("monitoring: invalid hostname for ping metrics", "host", host)
 		return nil, nil, nil, nil
 	}
 
+	// -c <count>: send exactly count pings per host.
+	// -p <ms>:    pause between pings (omitted when intervalMS=0, letting fping use its default of 1000 ms).
+	// -q:         quiet mode — suppress per-ping output; only print the summary line to stderr.
 	args := []string{"-c", strconv.Itoa(count)}
 	if intervalMS > 0 {
 		args = append(args, "-p", strconv.Itoa(intervalMS))
 	}
 	args = append(args, "-q", host)
 
-	// fping writes its per-host summary to stderr regardless of exit code.
-	// A non-zero exit simply means some/all hosts were unreachable.
-	// The timeout is generous: each ping takes at most ~1 s (or intervalMS), plus a 5 s buffer.
+	// fping writes its per-host summary to stderr regardless of exit code;
+	// a non-zero exit code simply means some or all hosts were unreachable.
+	// The context deadline is set to the expected total ping time (count × interval)
+	// plus a 5 s buffer so a slow host does not stall the goroutine indefinitely.
 	pingDuration := time.Duration(count) * time.Duration(max(intervalMS, 1000)) * time.Millisecond
 	ctx, cancel := context.WithTimeout(context.Background(), pingDuration+5*time.Second)
 	defer cancel()
@@ -81,24 +89,29 @@ func fpingRun(host string, count, intervalMS int) (avg, minMS, maxMS *float64, l
 	cmd := exec.CommandContext(ctx, fpingPath(), args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	cmd.Run() //nolint:errcheck
+	cmd.Run() //nolint:errcheck // non-zero exit is normal for unreachable hosts
 
 	output := stderr.String()
 	slog.Debug("monitoring: fping output", "host", host, "output", output)
 
+	// Parse the summary line; nil return on no match means the probe result
+	// will be treated as completely unreachable.
 	m := fpingRe.FindStringSubmatch(output)
 	if m == nil {
 		slog.Error("monitoring: failed to parse fping output", "host", host, "output", output)
 		return nil, nil, nil, nil
 	}
 
+	// Group 1 is always present: packet loss percentage (0–100).
 	lossVal, err := strconv.Atoi(m[1])
 	if err != nil {
 		return nil, nil, nil, nil
 	}
 	loss = &lossVal
 
-	// m[2]=min, m[3]=avg, m[4]=max — only present when packets were received.
+	// Groups 2–4 (min/avg/max RTT) are only present when at least one packet
+	// was received. When all packets are lost the RTT fields are omitted from
+	// fping's output, so we leave the pointer fields nil to signal "no data".
 	if m[3] != "" {
 		if v, err := strconv.ParseFloat(m[3], 64); err == nil {
 			avg = &v
@@ -157,14 +170,19 @@ func MonitoringService() {
 		return
 	}
 
+	// Flatten the nested payload structure into a single probe list.
 	var probes []probePayload
 	for _, item := range items {
 		probes = append(probes, item.PayloadData...)
 	}
 	slog.Debug("monitoring: total probes", "count", len(probes))
 
-	// probeRecord carries the server-facing result (from the fast 3-ping check)
-	// and the graph-specific RTT values (from the thorough 20-ping check).
+	// probeRecord carries two independent measurements for each probe:
+	//   result    — the 3-ping "fast" check reported to the server for up/down status.
+	//   graph*    — the 20-ping "thorough" check used only for rrdtool graphs.
+	// They are intentionally separate: the server status endpoint only needs a
+	// quick ping result, while the graph needs enough samples for a meaningful
+	// jitter band.
 	type probeRecord struct {
 		result     probeResult
 		graphAvg   *float64
@@ -179,22 +197,28 @@ func MonitoringService() {
 		records []probeRecord
 	)
 
+	// Run all probes concurrently. Each probe spawns its own fping process,
+	// so there is no shared ICMP socket to contend over.
 	for _, p := range probes {
 		wg.Add(1)
 		go func(probe probePayload) {
 			defer wg.Done()
 			slog.Debug("monitoring: running probe", "probe_id", probe.ProbeID, "host", probe.Host, "check_type", probe.CheckType, "port", probe.Port)
 
-			// Fast check — 3 pings, result sent to server.
+			// Fast check: 3 pings, result sent to the server for status reporting.
 			avg, loss := generatePingMetrics(probe.Host)
 			slog.Info("monitoring: ping metrics", "probe_id", probe.ProbeID, "ping_data", avg, "packet_loss_data", loss)
 
+			// Determine up/down status. If avg is nil the host returned no
+			// packets at all; skip the protocol-specific check and mark it down.
 			var status string
 			if avg == nil {
 				status = "down"
 			} else {
 				switch probe.CheckType {
 				case "tcp":
+					// TCP check verifies that a specific service port is open,
+					// not just that the host responds to ICMP.
 					status = performTCPCheck(probe.Host, probe.Port)
 				case "ping":
 					status = performPingCheck(probe.Host)
@@ -204,7 +228,8 @@ func MonitoringService() {
 				}
 			}
 
-			// Thorough check — 20 pings at 100 ms intervals, used only for graphs.
+			// Thorough check: 20 pings at 100 ms intervals (~2 s total).
+			// More samples produce a wider, more accurate jitter band in the graph.
 			gAvg, gMin, gMax, gLoss := generateGraphMetrics(probe.Host)
 			graphLoss := 0
 			if gLoss != nil {
@@ -213,6 +238,7 @@ func MonitoringService() {
 
 			slog.Debug("monitoring: probe result", "probe_id", probe.ProbeID, "host", probe.Host, "status", status)
 
+			// Append under a mutex because multiple probe goroutines may finish simultaneously.
 			mu.Lock()
 			records = append(records, probeRecord{
 				result: probeResult{
@@ -238,7 +264,8 @@ func MonitoringService() {
 		return
 	}
 
-	// Extract server-facing results.
+	// Extract server-facing results from the combined records and POST them
+	// in a single bulk request to reduce HTTP overhead.
 	results := make([]probeResult, len(records))
 	for i, r := range records {
 		results[i] = r.result
@@ -254,7 +281,9 @@ func MonitoringService() {
 	slog.Debug("monitoring: POST response", "http_status", resp.StatusCode)
 	slog.Info("monitoring: combined results sent", "count", len(results))
 
-	// Persist measurements and regenerate graphs.
+	// RRD pipeline: for each probe, create the RRD if it doesn't exist,
+	// feed in the latest measurement, render a PNG, and upload it to the tenant.
+	// Failures are per-probe and do not abort the remaining graphs.
 	graphsDir := graph.GraphDir(config.DataDir())
 	if err := os.MkdirAll(graphsDir, 0755); err != nil {
 		slog.Error("monitoring: failed to create graphs dir", "err", err)
@@ -265,22 +294,26 @@ func MonitoringService() {
 	for _, rec := range records {
 		id := rec.result.ID
 
+		// Create the RRD database file on first use; idempotent on subsequent runs.
 		if err := graph.EnsureRRD(config.DataDir(), id); err != nil {
 			slog.Error("monitoring: failed to ensure RRD", "probe_id", id, "err", err)
 			continue
 		}
 
+		// Feed this minute's measurement into the round-robin database.
 		if err := graph.Update(config.DataDir(), id, now, rec.graphAvg, rec.graphMinMS, rec.graphMaxMS, rec.graphLoss); err != nil {
 			slog.Error("monitoring: failed to update RRD", "probe_id", id, "err", err)
 			continue
 		}
 
+		// Re-render the 24-hour PNG from the updated RRD data.
 		outPath := graph.ProbePath(config.DataDir(), id)
 		if err := graph.Render(config.DataDir(), id, outPath); err != nil {
 			slog.Error("monitoring: failed to render graph", "probe_id", id, "err", err)
 			continue
 		}
 
+		// Read the rendered PNG and upload it to the tenant for display in the dashboard.
 		pngData, err := os.ReadFile(outPath)
 		if err != nil {
 			slog.Error("monitoring: failed to read rendered graph", "probe_id", id, "err", err)
@@ -298,6 +331,7 @@ func MonitoringService() {
 	}
 }
 
+// performTCPCheck attempts a TCP connection to host:port and returns "up" on success, "down" on failure.
 func performTCPCheck(host string, port int) string {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)

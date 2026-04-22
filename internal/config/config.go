@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package config
 
 import (
@@ -36,6 +38,8 @@ func (t *Tenant) GetAPIKey() string {
 // GetEncryptionKey decodes and returns the 32-byte ChaCha20-Poly1305 key from secure storage.
 // Returns an error if the key is not configured or is not a valid 32-byte hex string.
 func (t *Tenant) GetEncryptionKey() ([]byte, error) {
+	// Prefer the secure wrapper (set after Load); fall back to the plain field
+	// for callers that construct a Config struct directly (e.g. tests, Setup wizard).
 	var raw string
 	if t.encKeySec != nil && !t.encKeySec.IsEmpty() {
 		raw = t.encKeySec.String()
@@ -45,10 +49,15 @@ func (t *Tenant) GetEncryptionKey() ([]byte, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("encryption_key not set in [tenant] config")
 	}
+
+	// The key is stored as a 64-character hex string (32 bytes × 2 hex digits/byte).
 	key, err := hex.DecodeString(raw)
 	if err != nil {
 		return nil, fmt.Errorf("encryption_key is not valid hex: %w", err)
 	}
+
+	// ChaCha20-Poly1305 requires exactly 256 bits (32 bytes). Reject anything else
+	// before it reaches the cipher to get a clear error rather than a cryptic one.
 	if len(key) != 32 {
 		return nil, fmt.Errorf("encryption_key must be 32 bytes (64 hex chars), got %d bytes", len(key))
 	}
@@ -134,21 +143,31 @@ func Exists() bool {
 // Load reads the config file from disk. If the file does not exist the
 // returned Config is populated with defaults and no error is returned.
 func Load() (*Config, error) {
+	// Phase 1: start with safe defaults (VerifySSL=true, log level=info).
+	// toml.DecodeFile merges into the struct, so un-set keys retain their defaults.
 	cfg := defaults()
 
 	path := ConfigPath()
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// No config file yet — first-run or uninitialized install.
+		// Return defaults so the agent can start without crashing; the Setup
+		// wizard or GUI will write a real config later.
 		mu.Lock()
 		instance = cfg
 		mu.Unlock()
 		return cfg, nil
 	}
 
+	// Phase 2: decode TOML over the defaults struct. Any key present in
+	// config.toml overwrites the corresponding default value.
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
 		return nil, err
 	}
 
-	// Convert sensitive strings to secure storage.
+	// Phase 3: scrub sensitive plain-text strings from the struct and move them
+	// into secure.String wrappers. secure.String zeroes the backing buffer when
+	// GC'd, limiting how long credentials linger in process memory after they are
+	// no longer needed. The exported field is cleared to prevent accidental logging.
 	if cfg.Tenant.APIKey != "" {
 		cfg.Tenant.apiKeySec = secure.NewString(cfg.Tenant.APIKey)
 		cfg.Tenant.APIKey = ""
@@ -338,8 +357,10 @@ func promptPassword(r *bufio.Reader, label string) string {
 
 		fd := int(os.Stdin.Fd())
 		if term.IsTerminal(fd) {
+			// stdin is an interactive terminal: use term.ReadPassword, which
+			// disables echo so the typed password is not visible on screen.
 			b, err := term.ReadPassword(fd)
-			fmt.Println()
+			fmt.Println() // ReadPassword omits the newline after the user hits Enter
 			if err == nil {
 				val := strings.TrimSpace(string(b))
 				if val != "" {
@@ -348,10 +369,11 @@ func promptPassword(r *bufio.Reader, label string) string {
 				fmt.Println("  (value is required)")
 				continue
 			}
-			// term.ReadPassword failed; fall through to plain text input.
+			// term.ReadPassword failed (rare); fall through to plain text input.
 		}
 
-		// Fallback for piped input or non-terminal environments.
+		// Fallback for piped input or non-terminal environments (e.g. automated
+		// provisioning scripts that pipe answers via stdin).
 		val, _ := r.ReadString('\n')
 		val = strings.TrimSpace(val)
 		if val != "" {

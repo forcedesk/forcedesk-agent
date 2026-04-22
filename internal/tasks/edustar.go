@@ -1,3 +1,5 @@
+// Copyright © 2026 ForcePoint Software. All rights reserved.
+
 package tasks
 
 import (
@@ -213,6 +215,7 @@ func EduStarCommand(action string) {
 // Shared service operations
 // ============================================================
 
+// populateStudents fetches all students for the configured school from STMC and posts them to the tenant.
 func populateStudents(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: fetching students", "school", cfg.SchoolCode)
 
@@ -232,6 +235,7 @@ func populateStudents(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfi
 	slog.Info("edustar: students synced", "count", len(students), "status", resp.StatusCode)
 }
 
+// populateStaff fetches staff (and technicians) for the configured school from STMC and posts them to the tenant.
 func populateStaff(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: fetching staff", "school", cfg.SchoolCode)
 
@@ -251,6 +255,8 @@ func populateStaff(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) 
 	slog.Info("edustar: staff synced", "status", resp.StatusCode)
 }
 
+// populateCRT fetches the members of the CRT group from STMC and posts them to the tenant.
+// Skipped when CRTGroupDN or CRTGroupName is not configured.
 func populateCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	if cfg.CRTGroupDN == "" || cfg.CRTGroupName == "" {
 		slog.Warn("edustar: CRT group DN/name not configured, skipping CRT sync")
@@ -275,9 +281,14 @@ func populateCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: CRT accounts synced", "count", len(members), "status", resp.StatusCode)
 }
 
+// expireCRT disables each CRT account in STMC and scrambles its password so it
+// cannot be used even if re-enabled manually outside this system.
 func expireCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: expiring CRT accounts")
 
+	// Fetch the current CRT account list from the tenant rather than querying
+	// STMC directly — the tenant is the authoritative source for which accounts
+	// belong to the CRT rotation on a given day.
 	accounts, err := fetchCRTAccounts(tc)
 	if err != nil {
 		slog.Error("edustar: failed to fetch CRT accounts", "err", err)
@@ -285,11 +296,13 @@ func expireCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	}
 
 	for _, acc := range accounts {
+		// Step 1: Disable the account in STMC to prevent login immediately.
 		if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
 			slog.Error("edustar: disable failed", "login", acc.Login, "err", err)
 			continue
 		}
-		// Scramble the password so the account cannot be used even if manually re-enabled.
+		// Step 2: Scramble the password with a random UUID so the account cannot be
+		// reactivated simply by re-enabling it — the credential is now unknown to anyone.
 		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
 			slog.Error("edustar: password scramble failed", "login", acc.Login, "err", err)
 		}
@@ -299,6 +312,8 @@ func expireCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: CRT expire complete", "count", len(accounts))
 }
 
+// enableCRT re-enables each CRT account in STMC, sets a fresh daily password via
+// password.ninja, and posts the updated credentials to the tenant for the daily CRT email.
 func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: enabling CRT accounts")
 
@@ -316,18 +331,27 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 
 	var updated []crtPassword
 
+	// Three-step activation per account. All three steps must succeed for the
+	// account to be added to the updated list; partial success (e.g. enabled but
+	// password not set) is logged and the account is skipped so it won't appear
+	// in the daily CRT email with a stale or unknown credential.
 	for _, acc := range accounts {
+		// Step 1: Re-enable the AD account so the CRT can log in today.
 		if err := stmc.EnableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
 			slog.Error("edustar: enable failed", "login", acc.Login, "err", err)
 			continue
 		}
 
+		// Step 2: Generate a strong random password from password.ninja.
+		// A fresh password is created each day so that yesterday's credential
+		// becomes useless after expireCRT scrambles it tonight.
 		pwd, err := generatePassword()
 		if err != nil {
 			slog.Error("edustar: password generation failed", "login", acc.Login, "err", err)
 			continue
 		}
 
+		// Step 3: Push the new password into STMC so it takes effect immediately.
 		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
 			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
 			continue
@@ -352,6 +376,7 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: CRT enable complete", "count", len(updated), "status", resp.StatusCode)
 }
 
+// fetchCRTAccounts retrieves the list of CRT accounts stored on the tenant.
 func fetchCRTAccounts(tc *tenant.Client) ([]crtAccount, error) {
 	var accounts []crtAccount
 	if err := tc.GetJSON(tenant.URL("/api/agent/edustar/crt-accounts"), &accounts); err != nil {
@@ -360,6 +385,7 @@ func fetchCRTAccounts(tc *tenant.Client) ([]crtAccount, error) {
 	return accounts, nil
 }
 
+// fetchServiceAccounts retrieves the list of managed service accounts stored on the tenant.
 func fetchServiceAccounts(tc *tenant.Client) ([]serviceAccount, error) {
 	var accounts []serviceAccount
 	if err := tc.GetJSON(tenant.URL("/api/agent/edustar/service-accounts"), &accounts); err != nil {
@@ -368,6 +394,7 @@ func fetchServiceAccounts(tc *tenant.Client) ([]serviceAccount, error) {
 	return accounts, nil
 }
 
+// expireServiceAccounts disables each managed service account in STMC and scrambles its password.
 func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: expiring service accounts")
 
@@ -377,6 +404,9 @@ func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStar
 		return
 	}
 
+	// Same two-step disable+scramble pattern as expireCRT: disable first to block
+	// login immediately, then replace the password with a random UUID so the account
+	// cannot be reactivated by simply re-enabling it in the directory.
 	for _, acc := range accounts {
 		if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
 			slog.Error("edustar: disable service account failed", "login", acc.Login, "err", err)
@@ -392,7 +422,12 @@ func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStar
 	slog.Info("edustar: service account expire complete", "count", len(accounts))
 }
 
+// generatePassword fetches a single strong password from the password.ninja API.
+// The response is a JSON-quoted string (e.g. `"abc123"`) that is unquoted before returning.
 func generatePassword() (string, error) {
+	// Request one password with symbols, capitals, and numeric characters.
+	// excludeSymbols=f means "false" — symbols ARE included. The API returns a
+	// bare JSON string (not a JSON object), e.g.: `"Abc!123xyz"`.
 	resp, err := http.Get("https://password.ninja/api/password?symbols=true&capitals=true&numOfPasswords=1&excludeSymbols=f") //nolint:noctx
 	if err != nil {
 		return "", err
@@ -404,7 +439,9 @@ func generatePassword() (string, error) {
 		return "", err
 	}
 
-	// Response is a JSON-quoted string: `"password123"` — strip the surrounding quotes.
+	// The password.ninja response is a JSON-quoted string literal: `"Abc!123xyz"`.
+	// Strip the surrounding double quotes rather than running json.Unmarshal so we
+	// don't introduce a dependency on the body being valid JSON in other respects.
 	pwd := string(body)
 	if len(pwd) >= 2 && pwd[0] == '"' && pwd[len(pwd)-1] == '"' {
 		pwd = pwd[1 : len(pwd)-1]
@@ -681,6 +718,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 	}
 }
 
+// requireFlag exits with an error if value is empty, used to validate required CLI flags.
 func requireFlag(name, value string) {
 	if value == "" {
 		fmt.Fprintf(os.Stderr, "edustar: %s is required for this action\n", name)
@@ -688,11 +726,13 @@ func requireFlag(name, value string) {
 	}
 }
 
+// cliError prints an error to stderr and exits with code 1.
 func cliError(err error) {
 	fmt.Fprintf(os.Stderr, "edustar: %v\n", err)
 	os.Exit(1)
 }
 
+// cliPrint marshals v as indented JSON and prints it to stdout, or calls cliError on failure.
 func cliPrint(v any, err error) {
 	if err != nil {
 		cliError(err)
