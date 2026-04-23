@@ -20,7 +20,7 @@ import (
 	"github.com/forcedesk/forcedesk-agent/internal/ratelimit"
 )
 
-const AgentVersion = "2.0.44-golang-win32"
+const AgentVersion = "2.0.8-go-amd64-golang-win32"
 
 // Client is a thin wrapper around http.Client that automatically applies
 // agent authentication headers (API key, UUID, version) to every request.
