@@ -9,8 +9,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/forcedesk/forcedesk-agent/internal/config"
 	"github.com/forcedesk/forcedesk-agent/internal/scheduler"
 	"github.com/forcedesk/forcedesk-agent/internal/tasks"
+	"github.com/forcedesk/forcedesk-agent/internal/webui"
 )
 
 // IsWindowsService always returns false on non-Windows platforms.
@@ -24,6 +26,10 @@ func RunService() error { return fmt.Errorf("Windows service not supported on th
 func RunScheduler() {
 	s := buildScheduler()
 	s.Start()
+	cfg := config.Get()
+	if cfg.WebUI.Enabled {
+		webui.Start(cfg.WebUI.Listen, s)
+	}
 	slog.Info("scheduler running — press Ctrl+C to stop")
 	select {}
 }

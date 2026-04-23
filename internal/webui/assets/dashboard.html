@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForceDesk Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style type="text/tailwindcss">
+    @layer base {
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-300 font-sans antialiased min-h-screen">
+
+  <!-- Sticky header -->
+  <header class="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur-sm">
+    <div class="max-w-screen-xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm select-none">FD</div>
+        <span class="text-white font-semibold tracking-tight">ForceDesk Agent</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-600" id="last-refresh"></span>
+        <span id="badge-online"
+          class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+                 bg-green-950/60 text-green-400 border border-green-800/60">
+          <span class="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse"></span>Online
+        </span>
+        <span id="badge-offline"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+                 bg-red-950/60 text-red-400 border border-red-800/60">
+          <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Offline
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-screen-xl mx-auto px-5 py-6 space-y-5">
+
+    <!-- Info cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">Version</p>
+        <p class="text-sm font-mono text-white font-medium truncate" id="card-version">–</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">Uptime</p>
+        <p class="text-sm font-mono text-white font-medium" id="card-uptime">–</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 col-span-2 sm:col-span-1">
+        <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">Tenant</p>
+        <p class="text-sm font-mono text-blue-400 font-medium truncate" id="card-tenant" title="">–</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">Platform</p>
+        <p class="text-sm font-mono text-white font-medium" id="card-platform">–</p>
+      </div>
+    </div>
+
+    <!-- Scheduled tasks -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-white">Scheduled Tasks</h2>
+        <span class="text-xs text-gray-500" id="task-summary">–</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="border-b border-gray-800">
+            <tr class="text-gray-500 text-left">
+              <th class="px-5 py-3 font-medium">Task</th>
+              <th class="px-3 py-3 font-medium">Interval</th>
+              <th class="px-3 py-3 font-medium">Last&nbsp;Run</th>
+              <th class="px-3 py-3 font-medium">Duration</th>
+              <th class="px-3 py-3 font-medium">Next&nbsp;Run</th>
+              <th class="px-3 py-3 font-medium text-right">Runs</th>
+              <th class="px-5 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody id="task-rows" class="divide-y divide-gray-800/60"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Log viewer -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-800 flex items-center gap-3 flex-wrap">
+        <h2 class="text-sm font-semibold text-white mr-auto">Recent Logs</h2>
+        <select id="log-level"
+          class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2.5 py-1.5
+                 focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer">
+          <option value="">All levels</option>
+          <option value="ERROR">ERROR</option>
+          <option value="WARN">WARN</option>
+          <option value="INFO">INFO</option>
+          <option value="DEBUG">DEBUG</option>
+        </select>
+        <input id="log-search" type="search" placeholder="Filter…"
+          class="bg-gray-800 border border-gray-700 text-gray-300 placeholder-gray-600 text-xs
+                 rounded-lg px-2.5 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-blue-600">
+      </div>
+      <!-- Fixed-height scrollable log area -->
+      <div id="log-container" class="h-[460px] overflow-y-auto font-mono text-xs py-1.5 leading-5"></div>
+    </div>
+
+  </main>
+
+  <script>
+  // ─── state ────────────────────────────────────────────────────────────────
+  var allLogs = [];
+
+  // ─── helpers ──────────────────────────────────────────────────────────────
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function fmtHMS(iso) {
+    if (!iso) return '–';
+    var d = new Date(iso);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '–';
+    var ms = Date.now() - new Date(iso).getTime();
+    if (ms < 5000)     return 'just now';
+    if (ms < 60000)    return Math.floor(ms / 1000) + 's ago';
+    if (ms < 3600000)  return Math.floor(ms / 60000) + 'm ago';
+    if (ms < 86400000) return Math.floor(ms / 3600000) + 'h ago';
+    return fmtHMS(iso);
+  }
+
+  function timeUntil(iso) {
+    if (!iso) return '–';
+    var ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0)      return 'due';
+    if (ms < 60000)   return 'in ' + Math.floor(ms / 1000) + 's';
+    if (ms < 3600000) return 'in ' + Math.floor(ms / 60000) + 'm';
+    return 'in ' + Math.floor(ms / 3600000) + 'h';
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ─── log rendering ────────────────────────────────────────────────────────
+  var levelTextClass = { ERROR: 'text-red-400', WARN: 'text-yellow-400', DEBUG: 'text-gray-500' };
+  var levelBadgeClass = {
+    ERROR: 'bg-red-950/60 text-red-400 border-red-800/50',
+    WARN:  'bg-yellow-950/60 text-yellow-400 border-yellow-800/50',
+    DEBUG: 'bg-gray-800 text-gray-500 border-gray-700/50',
+    INFO:  'bg-blue-950/50 text-blue-400 border-blue-800/50'
+  };
+
+  function renderLogs() {
+    var level  = document.getElementById('log-level').value;
+    var search = document.getElementById('log-search').value.toLowerCase();
+    var box    = document.getElementById('log-container');
+
+    var pinned = box.scrollHeight - box.scrollTop - box.clientHeight < 50;
+
+    var filtered = allLogs.filter(function(l) {
+      if (level && l.level !== level) return false;
+      if (search && (l.msg || '').toLowerCase().indexOf(search) === -1) return false;
+      return true;
+    });
+
+    var rows = filtered.map(function(l) {
+      var lvl   = l.level || 'INFO';
+      var badge = levelBadgeClass[lvl] || levelBadgeClass['INFO'];
+      var txt   = levelTextClass[lvl] || 'text-gray-300';
+
+      // Build extra key=value pairs for fields beyond time/level/msg.
+      var extra = '';
+      var keys = Object.keys(l);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (k === 'time' || k === 'level' || k === 'msg') continue;
+        extra += ' <span class="text-gray-600">' + esc(k) + '=</span>' +
+                 '<span class="text-gray-500">' + esc(JSON.stringify(l[k])) + '</span>';
+      }
+
+      return '<div class="flex gap-2 items-baseline px-4 py-px hover:bg-gray-800/40 transition-colors">' +
+        '<span class="shrink-0 text-gray-600 w-[60px] select-none">' + fmtHMS(l.time) + '</span>' +
+        '<span class="shrink-0 inline-block px-1.5 py-px rounded border text-[10px] font-semibold w-12 text-center ' + badge + '">' + esc(lvl) + '</span>' +
+        '<span class="' + txt + ' break-all">' + esc(l.msg) + extra + '</span>' +
+        '</div>';
+    }).join('');
+
+    box.innerHTML = rows || '<div class="px-4 py-8 text-center text-gray-600">No log entries match the current filter.</div>';
+    if (pinned) box.scrollTop = box.scrollHeight;
+  }
+
+  // ─── task status badge ────────────────────────────────────────────────────
+  function taskBadge(t) {
+    if (t.running) {
+      return badge('bg-blue-950/60 text-blue-400 border-blue-800/50',
+        '<span class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse"></span>', 'Running');
+    }
+    if (t.last_panic) {
+      return badge('bg-red-950/60 text-red-400 border-red-800/50',
+        '<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>', 'Panic');
+    }
+    if (t.run_count > 0) {
+      return badge('bg-gray-800/60 text-gray-400 border-gray-700/50',
+        '<span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>', 'Idle');
+    }
+    return badge('bg-gray-900 text-gray-600 border-gray-800/50',
+      '<span class="h-1.5 w-1.5 rounded-full bg-gray-700"></span>', 'Pending');
+  }
+
+  function badge(cls, dot, label) {
+    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ' + cls + '">' +
+      dot + label + '</span>';
+  }
+
+  // ─── online/offline indicator ─────────────────────────────────────────────
+  function setOnline(online) {
+    document.getElementById('badge-online').style.display = online ? 'flex' : 'none';
+    document.getElementById('badge-offline').style.display = online ? 'none' : 'flex';
+  }
+
+  // ─── main poll loop ───────────────────────────────────────────────────────
+  async function poll() {
+    try {
+      var resp = await fetch('/api/status');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var d = await resp.json();
+
+      setOnline(true);
+
+      // Agent info cards
+      document.getElementById('card-version').textContent  = d.agent.version  || '–';
+      document.getElementById('card-uptime').textContent   = d.agent.uptime   || '–';
+      var tenantEl = document.getElementById('card-tenant');
+      tenantEl.textContent = d.agent.tenant_url || '–';
+      tenantEl.title       = d.agent.tenant_url || '';
+      document.getElementById('card-platform').textContent = (d.agent.os || '') + '/' + (d.agent.arch || '');
+
+      // Last-refresh timestamp
+      var now = new Date();
+      document.getElementById('last-refresh').textContent =
+        'Updated ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
+
+      // Tasks table
+      var tasks   = d.tasks || [];
+      var running = tasks.filter(function(t) { return t.running; }).length;
+      document.getElementById('task-summary').textContent =
+        tasks.length + ' task' + (tasks.length !== 1 ? 's' : '') +
+        (running > 0 ? ', ' + running + ' running' : '');
+
+      var rows = tasks.map(function(t) {
+        var panicHint = t.last_panic
+          ? ' title="Panic: ' + esc(t.last_panic) + '"'
+          : '';
+        return '<tr class="hover:bg-gray-800/30 transition-colors"' + panicHint + '>' +
+          '<td class="px-5 py-2.5 font-mono text-white font-medium">' + esc(t.name) + '</td>' +
+          '<td class="px-3 py-2.5 text-gray-400">' + esc(t.interval) + '</td>' +
+          '<td class="px-3 py-2.5 text-gray-400">' + timeAgo(t.last_run) + '</td>' +
+          '<td class="px-3 py-2.5 text-gray-400 font-mono">' + esc(t.duration || '–') + '</td>' +
+          '<td class="px-3 py-2.5 text-gray-400">' + timeUntil(t.next_run) + '</td>' +
+          '<td class="px-3 py-2.5 text-gray-400 text-right font-mono">' + (t.run_count || 0) + '</td>' +
+          '<td class="px-5 py-2.5">' + taskBadge(t) + '</td>' +
+          '</tr>';
+      }).join('');
+      document.getElementById('task-rows').innerHTML = rows ||
+        '<tr><td colspan="7" class="px-5 py-6 text-center text-gray-600">No tasks registered.</td></tr>';
+
+      // Logs (API sends oldest-first; keep that order, scroll to bottom)
+      allLogs = d.logs || [];
+      renderLogs();
+
+    } catch (err) {
+      setOnline(false);
+      console.error('poll failed:', err);
+    }
+  }
+
+  // Re-filter immediately when the user changes controls.
+  document.getElementById('log-level').addEventListener('change', renderLogs);
+  document.getElementById('log-search').addEventListener('input', renderLogs);
+
+  poll();
+  setInterval(poll, 5000);
+  </script>
+</body>
+</html>

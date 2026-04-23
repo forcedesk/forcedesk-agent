@@ -11,8 +11,10 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
+	"github.com/forcedesk/forcedesk-agent/internal/config"
 	"github.com/forcedesk/forcedesk-agent/internal/scheduler"
 	"github.com/forcedesk/forcedesk-agent/internal/tasks"
+	"github.com/forcedesk/forcedesk-agent/internal/webui"
 )
 
 const serviceName = "ForceDeskAgent"
@@ -36,6 +38,10 @@ func RunService() error {
 func RunScheduler() {
 	s := buildScheduler()
 	s.Start()
+	cfg := config.Get()
+	if cfg.WebUI.Enabled {
+		webui.Start(cfg.WebUI.Listen, s)
+	}
 	slog.Info("scheduler running in console mode — press Ctrl+C to stop")
 	// Block forever; signal handling is managed by the caller.
 	select {}
@@ -203,6 +209,10 @@ func (a *agentService) Execute(
 
 	s := buildScheduler()
 	s.Start()
+	cfg := config.Get()
+	if cfg.WebUI.Enabled {
+		webui.Start(cfg.WebUI.Listen, s)
+	}
 	slog.Info("service started", "name", serviceName)
 
 	changes <- svc.Status{State: svc.Running, Accepts: accepted}

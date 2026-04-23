@@ -107,12 +107,18 @@ type Logging struct {
 	Level string `toml:"level"`
 }
 
+type WebUI struct {
+	Enabled bool   `toml:"enabled"`
+	Listen  string `toml:"listen"` // "host:port", e.g. "127.0.0.1:8888"
+}
+
 type Config struct {
 	Tenant        Tenant        `toml:"tenant"`
 	Papercut      Papercut      `toml:"papercut"`
 	EduStar       EduStar       `toml:"edustar"`
 	DeviceManager DeviceManager `toml:"device_manager"`
 	Logging       Logging       `toml:"logging"`
+	WebUI         WebUI         `toml:"webui"`
 }
 
 var (
@@ -299,6 +305,7 @@ func defaults() *Config {
 		DeviceManager: DeviceManager{
 			LegacySSHOptions: "-o StrictHostKeyChecking=no -oKexAlgorithms=+diffie-hellman-group1-sha1",
 		},
+		WebUI: WebUI{Enabled: true, Listen: "127.0.0.1:8888"},
 	}
 }
 
