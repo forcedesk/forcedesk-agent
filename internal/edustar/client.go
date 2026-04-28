@@ -357,6 +357,51 @@ func (c *Client) RemoveFromGroup(school, groupDN, memberDN string) error {
 	return err
 }
 
+// AddCertificate requests a managed computer certificate for name at school.
+// The computer name is stored in STMC as "{school}-{name}" (e.g. "8185-COMPUTERNAME").
+// domain is used as the encryption password (pass "eduSTAR.NET"). (POST /CompAddMg)
+func (c *Client) AddCertificate(school, name, domain string) error {
+	compName := school + "-" + name
+	_, err := c.request("POST", "/CompAddMg", school, map[string]string{"compName": compName, "pwd": domain})
+	return err
+}
+
+// GetCertificate downloads the managed computer certificate for compName as a base64-encoded ZIP.
+// compName must include the school prefix (e.g. "8185-COMPUTERNAME").
+// domain is the decryption password (pass "eduSTAR.NET"). (POST /CompGetCert)
+// The STMC API may return the base64 string wrapped in a JSON object or as a bare string;
+// both forms are handled transparently.
+func (c *Client) GetCertificate(school, compName, domain string) (string, error) {
+	b, err := c.request("POST", "/CompGetCert", school, map[string]string{"compName": compName, "pwd": domain})
+	if err != nil {
+		return "", err
+	}
+	// Try a bare JSON string literal first: the API returns "base64..." (quotes included).
+	var s string
+	if json.Unmarshal(b, &s) == nil && s != "" {
+		return s, nil
+	}
+	// Try a JSON object envelope — the API may return {"data": "..."} or similar.
+	var wrapper map[string]any
+	if json.Unmarshal(b, &wrapper) == nil {
+		for _, key := range []string{"data", "cert", "certificate", "content"} {
+			if v, ok := wrapper[key].(string); ok && v != "" {
+				return v, nil
+			}
+		}
+		// Single-key object: return its string value.
+		if len(wrapper) == 1 {
+			for _, v := range wrapper {
+				if v, ok := v.(string); ok {
+					return v, nil
+				}
+			}
+		}
+	}
+	// Plain text response — return as-is.
+	return string(b), nil
+}
+
 // DisableServiceAccount disables the service account identified by DN. (POST /SvcAccDisable)
 func (c *Client) DisableServiceAccount(school, dn string) error {
 	_, err := c.request("POST", "/SvcAccDisable", school, map[string]string{"dn": dn})

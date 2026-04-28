@@ -22,6 +22,13 @@ type commandPayload struct {
 	SharedAccount    string  `json:"shared_account"`
 	RequestedBalance float64 `json:"requested_balance"`
 	AdjustmentReason string  `json:"adjustment_reason"`
+	Snid             string  `json:"snid"`
+	ComputerName     string  `json:"computer_name"`
+	RequestUUID      string  `json:"request_uuid"`
+	DeviceType       string  `json:"device_type"`
+	CertName         string  `json:"cert_name"`
+	BatchID          string  `json:"batch_id"`
+	BatchTotal       int     `json:"batch_total"`
 }
 
 // CommandQueueService polls the ForceDesk server for pending commands and executes them.
@@ -79,6 +86,22 @@ func CommandQueueService() {
 				item.PayloadData.RequestedBalance,
 				item.PayloadData.AdjustmentReason,
 			)
+
+		case "request-student-device-certificate":
+			if item.PayloadData.Snid == "" || item.PayloadData.ComputerName == "" {
+				slog.Warn("commandqueue: request-student-device-certificate missing snid or computer_name")
+			} else {
+				slog.Info("commandqueue: requesting student device certificate", "snid", item.PayloadData.Snid)
+				go RequestStudentDeviceCertificate(item.PayloadData.Snid, item.PayloadData.ComputerName, item.PayloadData.RequestUUID, item.PayloadData.DeviceType)
+			}
+
+		case "request-bulk-certificate":
+			if item.PayloadData.CertName == "" || item.PayloadData.BatchID == "" {
+				slog.Warn("commandqueue: request-bulk-certificate missing cert_name or batch_id")
+			} else {
+				slog.Info("commandqueue: requesting bulk certificate", "cert_name", item.PayloadData.CertName, "batch_id", item.PayloadData.BatchID)
+				go RequestBulkCertificate(item.PayloadData.CertName, item.PayloadData.BatchID, item.PayloadData.BatchTotal)
+			}
 
 		default:
 			slog.Warn("commandqueue: unknown command type", "type", item.Type)

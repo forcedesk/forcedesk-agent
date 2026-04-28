@@ -351,7 +351,17 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 			continue
 		}
 
-		// Step 3: Push the new password into STMC so it takes effect immediately.
+		// Step 3: Push the new password into STMC at least three times so it takes effect immediately.
+		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
+			continue
+		}
+
+		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
+			continue
+		}
+
 		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
 			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
 			continue
