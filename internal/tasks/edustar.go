@@ -357,16 +357,6 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 			continue
 		}
 
-		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
-			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
-			continue
-		}
-
-		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
-			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
-			continue
-		}
-
 		slog.Info("edustar: CRT account enabled", "login", acc.Login)
 		updated = append(updated, crtPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
 	}
