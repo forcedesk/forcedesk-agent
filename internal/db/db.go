@@ -141,7 +141,99 @@ func migrate(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
+		-- Stores service account passwords set during expire-service-accounts,
+		-- consumed by enable-service-accounts to re-apply the same credential.
+		CREATE TABLE IF NOT EXISTS service_account_passwords (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			login      TEXT,
+			ldap_dn    TEXT,
+			password   TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
+	return err
+}
+
+// EdupassAccount represents a row in the edupass_accounts table.
+type EdupassAccount struct {
+	Login    string
+	LdapDN   string
+	Password string
+}
+
+// UpsertEdupassAccount inserts or updates a CRT account password in the local database.
+func UpsertEdupassAccount(login, ldapDN, password string) error {
+	res, err := DB.Exec(`UPDATE edupass_accounts SET login=?, password=?, updated_at=CURRENT_TIMESTAMP WHERE ldap_dn=?`, login, password, ldapDN)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		_, err = DB.Exec(`INSERT INTO edupass_accounts (login, ldap_dn, password) VALUES (?, ?, ?)`, login, ldapDN, password)
+	}
+	return err
+}
+
+// GetEdupassAccounts returns all CRT account passwords stored in the local database.
+func GetEdupassAccounts() ([]EdupassAccount, error) {
+	rows, err := DB.Query(`SELECT login, ldap_dn, password FROM edupass_accounts`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EdupassAccount
+	for rows.Next() {
+		var a EdupassAccount
+		if err := rows.Scan(&a.Login, &a.LdapDN, &a.Password); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ClearEdupassAccounts removes all rows from the edupass_accounts table.
+func ClearEdupassAccounts() error {
+	_, err := DB.Exec(`DELETE FROM edupass_accounts`)
+	return err
+}
+
+// UpsertServiceAccountPassword inserts or updates a service account password in the local database.
+func UpsertServiceAccountPassword(login, ldapDN, password string) error {
+	res, err := DB.Exec(`UPDATE service_account_passwords SET login=?, password=?, updated_at=CURRENT_TIMESTAMP WHERE ldap_dn=?`, login, password, ldapDN)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		_, err = DB.Exec(`INSERT INTO service_account_passwords (login, ldap_dn, password) VALUES (?, ?, ?)`, login, ldapDN, password)
+	}
+	return err
+}
+
+// GetServiceAccountPasswords returns all service account passwords stored in the local database.
+func GetServiceAccountPasswords() ([]EdupassAccount, error) {
+	rows, err := DB.Query(`SELECT login, ldap_dn, password FROM service_account_passwords`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EdupassAccount
+	for rows.Next() {
+		var a EdupassAccount
+		if err := rows.Scan(&a.Login, &a.LdapDN, &a.Password); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ClearServiceAccountPasswords removes all rows from the service_account_passwords table.
+func ClearServiceAccountPasswords() error {
+	_, err := DB.Exec(`DELETE FROM service_account_passwords`)
 	return err
 }
 
