@@ -80,12 +80,14 @@ func (p *Papercut) GetAPIKey() string {
 }
 
 type EduStar struct {
-	Enabled      bool   `toml:"enabled"`
-	Username     string `toml:"username"`
-	Password     string `toml:"password"`
-	SchoolCode   string `toml:"school_code"`
-	CRTGroupDN   string `toml:"crt_group_dn"`
-	CRTGroupName string `toml:"crt_group_name"`
+	Enabled                 bool   `toml:"enabled"`
+	Username                string `toml:"username"`
+	Password                string `toml:"password"`
+	SchoolCode              string `toml:"school_code"`
+	CRTGroupDN              string `toml:"crt_group_dn"`
+	CRTGroupName            string `toml:"crt_group_name"`
+	ServiceAccountGroupDN   string `toml:"service_account_group_dn"`
+	ServiceAccountGroupName string `toml:"service_account_group_name"`
 	// AuthMode controls authentication: "ntlm", "form", or "" (auto — tries NTLM then form).
 	AuthMode    string `toml:"auth_mode"`
 	passwordSec *secure.String

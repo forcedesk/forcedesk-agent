@@ -9,8 +9,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/forcedesk/forcedesk-agent/internal/config"
+	"github.com/forcedesk/forcedesk-agent/internal/db"
 	"github.com/forcedesk/forcedesk-agent/internal/edustar"
 	"github.com/forcedesk/forcedesk-agent/internal/tenant"
 )
@@ -18,23 +20,27 @@ import (
 // eduStarConfig holds STMC integration settings, sourced from either local
 // config.toml or the tenant API.
 type eduStarConfig struct {
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	SchoolCode   string `json:"school_code"`
-	CRTGroupDN   string `json:"crt_group_dn"`
-	CRTGroupName string `json:"crt_group_name"`
-	AuthMode     string `json:"auth_mode"`
+	Username                string `json:"username"`
+	Password                string `json:"password"`
+	SchoolCode              string `json:"school_code"`
+	CRTGroupDN              string `json:"crt_group_dn"`
+	CRTGroupName            string `json:"crt_group_name"`
+	ServiceAccountGroupDN   string `json:"service_account_group_dn"`
+	ServiceAccountGroupName string `json:"service_account_group_name"`
+	AuthMode                string `json:"auth_mode"`
 }
 
 // UnmarshalJSON handles school_code being sent as either a JSON string or number.
 func (c *eduStarConfig) UnmarshalJSON(b []byte) error {
 	type raw struct {
-		Username     string          `json:"username"`
-		Password     string          `json:"password"`
-		SchoolCode   json.RawMessage `json:"school_code"`
-		CRTGroupDN   string          `json:"crt_group_dn"`
-		CRTGroupName string          `json:"crt_group_name"`
-		AuthMode     string          `json:"auth_mode"`
+		Username                string          `json:"username"`
+		Password                string          `json:"password"`
+		SchoolCode              json.RawMessage `json:"school_code"`
+		CRTGroupDN              string          `json:"crt_group_dn"`
+		CRTGroupName            string          `json:"crt_group_name"`
+		ServiceAccountGroupDN   string          `json:"service_account_group_dn"`
+		ServiceAccountGroupName string          `json:"service_account_group_name"`
+		AuthMode                string          `json:"auth_mode"`
 	}
 	var r raw
 	if err := json.Unmarshal(b, &r); err != nil {
@@ -44,6 +50,8 @@ func (c *eduStarConfig) UnmarshalJSON(b []byte) error {
 	c.Password = r.Password
 	c.CRTGroupDN = r.CRTGroupDN
 	c.CRTGroupName = r.CRTGroupName
+	c.ServiceAccountGroupDN = r.ServiceAccountGroupDN
+	c.ServiceAccountGroupName = r.ServiceAccountGroupName
 	c.AuthMode = r.AuthMode
 
 	// school_code may arrive as a quoted string or a bare number.
@@ -89,12 +97,14 @@ func resolveConfig(tc *tenant.Client) (*eduStarConfig, error) {
 	local := config.Get().EduStar
 	if local.Enabled && local.Username != "" {
 		return &eduStarConfig{
-			Username:     local.Username,
-			Password:     local.GetPassword(),
-			SchoolCode:   local.SchoolCode,
-			CRTGroupDN:   local.CRTGroupDN,
-			CRTGroupName: local.CRTGroupName,
-			AuthMode:     local.AuthMode,
+			Username:                local.Username,
+			Password:                local.GetPassword(),
+			SchoolCode:              local.SchoolCode,
+			CRTGroupDN:              local.CRTGroupDN,
+			CRTGroupName:            local.CRTGroupName,
+			ServiceAccountGroupDN:   local.ServiceAccountGroupDN,
+			ServiceAccountGroupName: local.ServiceAccountGroupName,
+			AuthMode:                local.AuthMode,
 		}, nil
 	}
 	return fetchEduStarConfig(tc)
@@ -204,8 +214,12 @@ func EduStarCommand(action string) {
 		expireCRT(tc, stmc, cfg)
 	case "enable-crt-accounts":
 		enableCRT(tc, stmc, cfg)
+	case "populate-service-accounts":
+		populateServiceAccounts(tc, stmc, cfg)
 	case "expire-service-accounts":
 		expireServiceAccounts(tc, stmc, cfg)
+	case "enable-service-accounts":
+		enableServiceAccounts(tc, stmc, cfg)
 	default:
 		slog.Warn("edustar: unknown action", "action", action)
 	}
@@ -394,7 +408,34 @@ func fetchServiceAccounts(tc *tenant.Client) ([]serviceAccount, error) {
 	return accounts, nil
 }
 
-// expireServiceAccounts disables each managed service account in STMC and scrambles its password.
+// populateServiceAccounts fetches members of the service account group from STMC and posts them to the tenant.
+// Skipped when ServiceAccountGroupDN or ServiceAccountGroupName is not configured.
+func populateServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
+	if cfg.ServiceAccountGroupDN == "" || cfg.ServiceAccountGroupName == "" {
+		slog.Warn("edustar: service account group DN/name not configured, skipping service account sync")
+		return
+	}
+
+	slog.Info("edustar: fetching service account group members", "group", cfg.ServiceAccountGroupName)
+
+	members, err := stmc.GetGroup(cfg.SchoolCode, cfg.ServiceAccountGroupName, cfg.ServiceAccountGroupDN)
+	if err != nil {
+		slog.Error("edustar: GetGroup failed", "err", err)
+		return
+	}
+
+	resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/service-accounts"), members)
+	if err != nil {
+		slog.Error("edustar: failed to post service accounts", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	slog.Info("edustar: service accounts synced", "count", len(members), "status", resp.StatusCode)
+}
+
+// expireServiceAccounts disables each managed service account in STMC, sets a PasswordNinja
+// password as the scramble, and stores it locally for use by enableServiceAccounts.
 func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 	slog.Info("edustar: expiring service accounts")
 
@@ -404,22 +445,83 @@ func expireServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStar
 		return
 	}
 
-	// Same two-step disable+scramble pattern as expireCRT: disable first to block
-	// login immediately, then replace the password with a random UUID so the account
-	// cannot be reactivated by simply re-enabling it in the directory.
 	for _, acc := range accounts {
 		if err := stmc.DisableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
 			slog.Error("edustar: disable service account failed", "login", acc.Login, "err", err)
 			continue
 		}
-		// Scramble the password so the account cannot be used even if manually re-enabled.
-		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
+		pwd, err := generatePassword()
+		if err != nil {
+			slog.Error("edustar: password generation failed", "login", acc.Login, "err", err)
+			continue
+		}
+		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
 			slog.Error("edustar: password scramble failed", "login", acc.Login, "err", err)
+			continue
+		}
+		if err := db.UpsertServiceAccountPassword(acc.Login, acc.LdapDN, pwd); err != nil {
+			slog.Error("edustar: store service account password failed", "login", acc.Login, "err", err)
 		}
 		slog.Info("edustar: service account expired", "login", acc.Login)
 	}
 
 	slog.Info("edustar: service account expire complete", "count", len(accounts))
+}
+
+// enableServiceAccounts re-enables each service account in STMC, re-applies the password stored
+// during expireServiceAccounts, and posts the updated credentials to the tenant.
+func enableServiceAccounts(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
+	slog.Info("edustar: enabling service accounts")
+
+	accounts, err := fetchServiceAccounts(tc)
+	if err != nil {
+		slog.Error("edustar: failed to fetch service accounts", "err", err)
+		return
+	}
+
+	type svcPassword struct {
+		Login    string `json:"login"`
+		LdapDN   string `json:"ldap_dn"`
+		Password string `json:"password"`
+	}
+	var updated []svcPassword
+
+	for _, acc := range accounts {
+		slog.Info("edustar: processing service account", "login", acc.Login, "dn", acc.LdapDN)
+		slog.Info("edustar: enabling service account in STMC", "login", acc.Login)
+		if err := stmc.EnableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+			slog.Error("edustar: enable service account failed", "login", acc.Login, "err", err)
+			continue
+		}
+		pwd, err := generatePassword()
+		if err != nil {
+			slog.Error("edustar: password generation failed", "login", acc.Login, "err", err)
+			continue
+		}
+		slog.Info("edustar: setting service account password", "login", acc.Login, "password", pwd)
+		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+			slog.Error("edustar: set service account password failed", "login", acc.Login, "dn", acc.LdapDN, "password", pwd, "err", err)
+			continue
+		}
+		slog.Info("edustar: service account enabled", "login", acc.Login)
+		updated = append(updated, svcPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
+	}
+
+	slog.Info("edustar: service accounts processed", "total", len(accounts), "updated", len(updated))
+
+	if len(updated) == 0 {
+		return
+	}
+
+	slog.Info("edustar: posting service account passwords to tenant", "count", len(updated))
+	resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/service-passwords"), updated)
+	if err != nil {
+		slog.Error("edustar: failed to post service account passwords", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	slog.Info("edustar: service account enable complete", "count", len(updated), "status", resp.StatusCode)
 }
 
 // generatePassword fetches a single strong password from the password.ninja API.
@@ -635,9 +737,19 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 				fmt.Fprintf(os.Stderr, "  disable %s: %v\n", acc.Login, err)
 				continue
 			}
-			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
-				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+			pwd, err := generatePassword()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  generate password %s: %v\n", acc.Login, err)
+				continue
 			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := db.UpsertEdupassAccount(acc.Login, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  store password %s: %v\n", acc.Login, err)
+			}
+			time.Sleep(1 * 5)
 			fmt.Printf("  expired: %s\n", acc.Login)
 		}
 		fmt.Printf("Done. %d accounts expired.\n", len(accounts))
@@ -675,6 +787,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 				continue
 			}
 			fmt.Printf("  enabled: %s\n", acc.Login)
+			time.Sleep(1 * 5)
 			updated = append(updated, crtPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
 		}
 
@@ -689,6 +802,26 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 		} else {
 			fmt.Println("No accounts were updated.")
 		}
+
+	case "populate-service-accounts":
+		requireFlag("--group-dn", cfg.ServiceAccountGroupDN)
+		requireFlag("--group-name", cfg.ServiceAccountGroupName)
+		fmt.Printf("Fetching service account group %q...\n", cfg.ServiceAccountGroupName)
+		members, err := stmc.GetGroup(cfg.SchoolCode, cfg.ServiceAccountGroupName, cfg.ServiceAccountGroupDN)
+		if err != nil {
+			cliError(fmt.Errorf("GetGroup: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(members, nil)
+			break
+		}
+		fmt.Printf("Fetched %d members. Posting to tenant...\n", len(members))
+		resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/service-accounts"), members)
+		if err != nil {
+			cliError(fmt.Errorf("post service accounts: %w", err))
+		}
+		resp.Body.Close()
+		fmt.Printf("Done. HTTP %d\n", resp.StatusCode)
 
 	case "expire-service-accounts":
 		accounts, err := fetchServiceAccounts(tc)
@@ -705,12 +838,71 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 				fmt.Fprintf(os.Stderr, "  disable %s: %v\n", acc.Login, err)
 				continue
 			}
-			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, newUUID()); err != nil {
-				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+			pwd, err := generatePassword()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  generate password %s: %v\n", acc.Login, err)
+				continue
 			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  scramble password %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := db.UpsertServiceAccountPassword(acc.Login, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  store password %s: %v\n", acc.Login, err)
+			}
+			time.Sleep(1 * 5)
 			fmt.Printf("  expired: %s\n", acc.Login)
 		}
 		fmt.Printf("Done. %d service accounts expired.\n", len(accounts))
+
+	case "enable-service-accounts":
+		accounts, err := fetchServiceAccounts(tc)
+		if err != nil {
+			cliError(fmt.Errorf("fetch service accounts: %w", err))
+		}
+		if opts.Dump {
+			cliPrint(accounts, nil)
+			break
+		}
+		fmt.Printf("Enabling %d service accounts...\n", len(accounts))
+
+		type svcPassword struct {
+			Login    string `json:"login"`
+			LdapDN   string `json:"ldap_dn"`
+			Password string `json:"password"`
+		}
+		var updated []svcPassword
+
+		for _, acc := range accounts {
+			if err := stmc.EnableServiceAccount(cfg.SchoolCode, acc.LdapDN); err != nil {
+				fmt.Fprintf(os.Stderr, "  enable %s: %v\n", acc.Login, err)
+				continue
+			}
+			pwd, err := generatePassword()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  generate password %s: %v\n", acc.Login, err)
+				continue
+			}
+			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
+				fmt.Fprintf(os.Stderr, "  set password %s: %v\n", acc.Login, err)
+				continue
+			}
+			fmt.Printf("  enabled: %s\n", acc.Login)
+			updated = append(updated, svcPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
+			time.Sleep(1 * 5)
+		}
+
+		if len(updated) > 0 {
+			fmt.Printf("Posting %d updated passwords to tenant...\n", len(updated))
+			resp, err := tc.PostJSON(tenant.URL("/api/agent/ingest/edustar/service-passwords"), updated)
+			if err != nil {
+				cliError(fmt.Errorf("post service account passwords: %w", err))
+			}
+			resp.Body.Close()
+			fmt.Printf("Done. HTTP %d — %d accounts enabled.\n", resp.StatusCode, len(updated))
+		} else {
+			fmt.Println("No accounts were updated.")
+		}
 
 	default:
 		fmt.Fprintf(os.Stderr, "edustar: unknown action %q\n", action)
