@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"runtime"
@@ -14,9 +15,17 @@ import (
 	"github.com/forcedesk/forcedesk-agent/internal/logger"
 	"github.com/forcedesk/forcedesk-agent/internal/svc"
 	"github.com/forcedesk/forcedesk-agent/internal/tasks"
+	"github.com/getsentry/sentry-go"
 )
 
 func main() {
+	err := sentry.Init(sentry.ClientOptions{
+		Dsn: "https://eac401e19518f044be2cb1251abef2c8@sentry.forcedesk.io/11",
+	})
+	if err != nil {
+		log.Fatalf("sentry.Init: %s", err)
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
