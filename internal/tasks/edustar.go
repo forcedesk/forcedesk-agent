@@ -321,6 +321,7 @@ func expireCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 			slog.Error("edustar: password scramble failed", "login", acc.Login, "err", err)
 		}
 		slog.Info("edustar: CRT account expired", "login", acc.Login)
+		time.Sleep(5 * time.Second)
 	}
 
 	slog.Info("edustar: CRT expire complete", "count", len(accounts))
@@ -365,6 +366,9 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 			continue
 		}
 
+		// Wait for STMC to finish processing the enable before setting the password.
+		time.Sleep(5 * time.Second)
+
 		// Step 3: Push the new password into STMC at least three times so it takes effect immediately.
 		if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
 			slog.Error("edustar: set password failed", "login", acc.Login, "err", err)
@@ -373,6 +377,7 @@ func enableCRT(tc *tenant.Client, stmc *edustar.Client, cfg *eduStarConfig) {
 
 		slog.Info("edustar: CRT account enabled", "login", acc.Login)
 		updated = append(updated, crtPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
+		time.Sleep(5 * time.Second)
 	}
 
 	if len(updated) == 0 {
@@ -749,7 +754,7 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 			if err := db.UpsertEdupassAccount(acc.Login, acc.LdapDN, pwd); err != nil {
 				fmt.Fprintf(os.Stderr, "  store password %s: %v\n", acc.Login, err)
 			}
-			time.Sleep(1 * 5)
+			time.Sleep(5 * time.Second)
 			fmt.Printf("  expired: %s\n", acc.Login)
 		}
 		fmt.Printf("Done. %d accounts expired.\n", len(accounts))
@@ -782,12 +787,13 @@ func RunEduStarCLI(action string, opts EduStarCLIOpts) {
 				fmt.Fprintf(os.Stderr, "  generate password %s: %v\n", acc.Login, err)
 				continue
 			}
+			time.Sleep(5 * time.Second)
 			if err := stmc.SetStudentPassword(cfg.SchoolCode, acc.LdapDN, pwd); err != nil {
 				fmt.Fprintf(os.Stderr, "  set password %s: %v\n", acc.Login, err)
 				continue
 			}
 			fmt.Printf("  enabled: %s\n", acc.Login)
-			time.Sleep(1 * 5)
+			time.Sleep(5 * time.Second)
 			updated = append(updated, crtPassword{Login: acc.Login, LdapDN: acc.LdapDN, Password: pwd})
 		}
 
