@@ -103,6 +103,12 @@ func CommandQueueService() {
 				go RequestBulkCertificate(item.PayloadData.CertName, item.PayloadData.BatchID, item.PayloadData.BatchTotal)
 			}
 
+		case "sync-det-notebooks":
+			if item.PayloadData.Process {
+				slog.Info("commandqueue: triggering DET notebooks fleet sync")
+				go SyncDETNotebooks()
+			}
+
 		default:
 			slog.Warn("commandqueue: unknown command type", "type", item.Type)
 		}
