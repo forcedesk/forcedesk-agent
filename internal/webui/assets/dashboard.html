@@ -101,6 +101,15 @@
         <input id="log-search" type="search" placeholder="Filter…"
           class="bg-gray-800 border border-gray-700 text-gray-300 placeholder-gray-600 text-xs
                  rounded-lg px-2.5 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-blue-600">
+        <button id="log-freeze"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors
+                 bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600">
+          <svg id="freeze-icon" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/>
+          </svg>
+          <span id="freeze-label">Freeze</span>
+        </button>
       </div>
       <!-- Fixed-height scrollable log area -->
       <div id="log-container" class="h-[460px] overflow-y-auto font-mono text-xs py-1.5 leading-5"></div>
@@ -111,6 +120,7 @@
   <script>
   // ─── state ────────────────────────────────────────────────────────────────
   var allLogs = [];
+  var logFrozen = false;
 
   // ─── helpers ──────────────────────────────────────────────────────────────
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -272,8 +282,10 @@
         '<tr><td colspan="7" class="px-5 py-6 text-center text-gray-600">No tasks registered.</td></tr>';
 
       // Logs (API sends oldest-first; keep that order, scroll to bottom)
-      allLogs = d.logs || [];
-      renderLogs();
+      if (!logFrozen) {
+        allLogs = d.logs || [];
+        renderLogs();
+      }
 
     } catch (err) {
       setOnline(false);
@@ -284,6 +296,21 @@
   // Re-filter immediately when the user changes controls.
   document.getElementById('log-level').addEventListener('change', renderLogs);
   document.getElementById('log-search').addEventListener('input', renderLogs);
+
+  document.getElementById('log-freeze').addEventListener('click', function() {
+    logFrozen = !logFrozen;
+    var btn   = document.getElementById('log-freeze');
+    var label = document.getElementById('freeze-label');
+    if (logFrozen) {
+      btn.classList.remove('bg-gray-800', 'border-gray-700', 'text-gray-400', 'hover:text-gray-200', 'hover:border-gray-600');
+      btn.classList.add('bg-blue-950/60', 'border-blue-800/60', 'text-blue-400');
+      label.textContent = 'Unfreeze';
+    } else {
+      btn.classList.remove('bg-blue-950/60', 'border-blue-800/60', 'text-blue-400');
+      btn.classList.add('bg-gray-800', 'border-gray-700', 'text-gray-400', 'hover:text-gray-200', 'hover:border-gray-600');
+      label.textContent = 'Freeze';
+    }
+  });
 
   poll();
   setInterval(poll, 5000);
